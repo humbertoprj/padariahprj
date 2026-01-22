@@ -87,6 +87,7 @@ export default function PDV() {
   const [formaPagamento, setFormaPagamento] = useState<string | null>(null);
   const [descontoGeral, setDescontoGeral] = useState(0);
   const [nomeCliente, setNomeCliente] = useState('');
+  const [mobileTab, setMobileTab] = useState<'produtos' | 'comanda'>('produtos');
 
   // Filtrar produtos
   const produtosFiltrados = useMemo(() => {
@@ -327,265 +328,319 @@ export default function PDV() {
       )}
 
       {(view === 'produtos' || view === 'pagamento') && (
-        <div className="flex-1 flex overflow-hidden">
-          {/* Área de Produtos */}
-          <div className="flex-1 flex flex-col p-4 overflow-hidden">
-            {/* Busca e Filtros */}
-            <div className="flex gap-4 mb-4">
-              <button
-                onClick={() => {
-                  setComandaSelecionada(null);
-                  setView('comandas');
-                }}
-                className="btn-secondary"
-              >
-                <Receipt className="w-4 h-4 mr-2" />
-                Comandas
-              </button>
-              <div className="relative flex-1">
-                <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Buscar por nome ou código de barras..."
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  className="input-field pl-11 text-lg"
-                  autoFocus
-                />
-              </div>
-            </div>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Mobile Tab Switcher */}
+          <div className="md:hidden flex border-b border-border bg-card">
+            <button
+              onClick={() => setMobileTab('produtos')}
+              className={cn(
+                'flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2',
+                mobileTab === 'produtos'
+                  ? 'text-primary border-b-2 border-primary bg-primary/5'
+                  : 'text-muted-foreground'
+              )}
+            >
+              <Package className="w-4 h-4" />
+              Produtos
+            </button>
+            <button
+              onClick={() => setMobileTab('comanda')}
+              className={cn(
+                'flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2 relative',
+                mobileTab === 'comanda'
+                  ? 'text-primary border-b-2 border-primary bg-primary/5'
+                  : 'text-muted-foreground'
+              )}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              Comanda
+              {comandaAtual && comandaAtual.itens.length > 0 && (
+                <span className="absolute -top-1 right-1/4 w-5 h-5 bg-primary text-primary-foreground text-xs rounded-full flex items-center justify-center">
+                  {comandaAtual.itens.length}
+                </span>
+              )}
+            </button>
+          </div>
 
-            {/* Categorias */}
-            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-              {categorias.map((cat) => (
+          <div className="flex-1 flex overflow-hidden">
+            {/* Área de Produtos - hidden on mobile when comanda tab is active */}
+            <div className={cn(
+              "flex-1 flex flex-col p-4 overflow-hidden",
+              mobileTab === 'comanda' ? 'hidden md:flex' : 'flex'
+            )}>
+              {/* Busca e Filtros */}
+              <div className="flex gap-2 md:gap-4 mb-4 flex-wrap">
                 <button
-                  key={cat}
-                  onClick={() => setCategoriaSelecionada(cat)}
-                  className={cn(
-                    'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
-                    categoriaSelecionada === cat
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                  )}
+                  onClick={() => {
+                    setComandaSelecionada(null);
+                    setView('comandas');
+                  }}
+                  className="btn-secondary text-sm md:text-base"
                 >
-                  {cat}
+                  <Receipt className="w-4 h-4 mr-1 md:mr-2" />
+                  <span className="hidden sm:inline">Comandas</span>
                 </button>
-              ))}
-            </div>
+                <div className="relative flex-1 min-w-0">
+                  <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 md:w-5 h-4 md:h-5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Buscar produto..."
+                    value={busca}
+                    onChange={(e) => setBusca(e.target.value)}
+                    className="input-field pl-10 md:pl-11 text-sm md:text-lg w-full"
+                    autoFocus
+                  />
+                </div>
+              </div>
 
-            {/* Grid de Produtos */}
-            <div className="flex-1 overflow-y-auto scrollbar-thin">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                {produtosFiltrados.map((produto) => (
+              {/* Categorias */}
+              <div className="flex gap-2 mb-4 overflow-x-auto pb-2 scrollbar-thin">
+                {categorias.map((cat) => (
                   <button
-                    key={produto.id}
-                    onClick={() => adicionarProduto(produto)}
-                    className="pdv-product-card text-left"
+                    key={cat}
+                    onClick={() => setCategoriaSelecionada(cat)}
+                    className={cn(
+                      'px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium whitespace-nowrap transition-colors',
+                      categoriaSelecionada === cat
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                    )}
                   >
-                    <div className="aspect-square bg-muted rounded-lg mb-2 flex items-center justify-center">
-                      <Package className="w-8 h-8 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground line-clamp-2">{produto.nome}</p>
-                    <p className="text-xs text-muted-foreground">{produto.categoria}</p>
-                    <p className="text-lg font-bold text-primary mt-1">
-                      R$ {produto.preco.toFixed(2).replace('.', ',')}
-                    </p>
+                    {cat}
                   </button>
                 ))}
               </div>
-            </div>
-          </div>
 
-          {/* Painel da Comanda */}
-          <div className="w-96 bg-card border-l border-border flex flex-col">
-            {/* Header da Comanda */}
-            <div className="p-4 border-b border-border bg-primary/5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Receipt className="w-5 h-5 text-primary" />
-                  <h2 className="text-xl font-bold text-foreground">Comanda {comandaSelecionada}</h2>
-                </div>
-                <span className="text-sm text-muted-foreground">{comandaAtual?.itens.length || 0} itens</span>
-              </div>
-              {/* Nome do Cliente */}
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Nome do cliente (opcional)"
-                  value={comandaAtual?.clienteNome || ''}
-                  onChange={(e) => atualizarNomeCliente(e.target.value)}
-                  className="flex-1 bg-transparent border-b border-border text-sm py-1 focus:outline-none focus:border-primary"
-                />
-              </div>
-            </div>
-
-            {/* Lista de Itens */}
-            <div className="flex-1 overflow-y-auto scrollbar-thin">
-              {!comandaAtual?.itens.length ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                  <ShoppingCart className="w-16 h-16 mb-4" />
-                  <p>Comanda vazia</p>
-                  <p className="text-sm">Adicione produtos</p>
-                </div>
-              ) : (
-                <div className="p-4 space-y-2">
-                  {comandaAtual.itens.map((item) => (
-                    <div key={item.id} className="bg-muted/50 rounded-lg p-3">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-foreground">{item.produto.nome}</p>
-                          <p className="text-xs text-muted-foreground">
-                            R$ {item.produto.preco.toFixed(2).replace('.', ',')} cada
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => removerItem(item.id)}
-                          className="text-muted-foreground hover:text-destructive transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+              {/* Grid de Produtos */}
+              <div className="flex-1 overflow-y-auto scrollbar-thin">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-3">
+                  {produtosFiltrados.map((produto) => (
+                    <button
+                      key={produto.id}
+                      onClick={() => {
+                        adicionarProduto(produto);
+                        // On mobile, show a quick feedback
+                        if (window.innerWidth < 768) {
+                          setMobileTab('comanda');
+                        }
+                      }}
+                      className="pdv-product-card text-left p-2 md:p-3"
+                    >
+                      <div className="aspect-square bg-muted rounded-lg mb-2 flex items-center justify-center">
+                        <Package className="w-6 md:w-8 h-6 md:h-8 text-muted-foreground" />
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => alterarQuantidade(item.id, -1)}
-                            className="w-8 h-8 rounded-lg bg-background flex items-center justify-center hover:bg-accent transition-colors"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                          <span className="w-8 text-center font-medium">{item.quantidade}</span>
-                          <button
-                            onClick={() => alterarQuantidade(item.id, 1)}
-                            className="w-8 h-8 rounded-lg bg-background flex items-center justify-center hover:bg-accent transition-colors"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-                        <span className="font-semibold text-foreground">
-                          R$ {(item.produto.preco * item.quantidade).toFixed(2).replace('.', ',')}
-                        </span>
-                      </div>
-                    </div>
+                      <p className="text-xs md:text-sm font-medium text-foreground line-clamp-2">{produto.nome}</p>
+                      <p className="text-xs text-muted-foreground hidden sm:block">{produto.categoria}</p>
+                      <p className="text-sm md:text-lg font-bold text-primary mt-1">
+                        R$ {produto.preco.toFixed(2).replace('.', ',')}
+                      </p>
+                    </button>
                   ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Painel da Comanda - hidden on mobile when produtos tab is active */}
+            <div className={cn(
+              "w-full md:w-96 bg-card md:border-l border-border flex flex-col",
+              mobileTab === 'produtos' ? 'hidden md:flex' : 'flex'
+            )}>
+              {/* Header da Comanda */}
+              <div className="p-4 border-b border-border bg-primary/5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-primary" />
+                    <h2 className="text-xl font-bold text-foreground">Comanda {comandaSelecionada}</h2>
+                  </div>
+                  <span className="text-sm text-muted-foreground">{comandaAtual?.itens.length || 0} itens</span>
+                </div>
+                {/* Nome do Cliente */}
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Nome do cliente (opcional)"
+                    value={comandaAtual?.clienteNome || ''}
+                    onChange={(e) => atualizarNomeCliente(e.target.value)}
+                    className="flex-1 bg-transparent border-b border-border text-sm py-1 focus:outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              {/* Lista de Itens */}
+              <div className="flex-1 overflow-y-auto scrollbar-thin">
+                {!comandaAtual?.itens.length ? (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-12">
+                    <ShoppingCart className="w-16 h-16 mb-4" />
+                    <p>Comanda vazia</p>
+                    <p className="text-sm">Adicione produtos</p>
+                    <button
+                      onClick={() => setMobileTab('produtos')}
+                      className="mt-4 btn-primary md:hidden"
+                    >
+                      <Package className="w-4 h-4 mr-2" />
+                      Ver Produtos
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-4 space-y-2">
+                    {comandaAtual.itens.map((item) => (
+                      <div key={item.id} className="bg-muted/50 rounded-lg p-3">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-foreground">{item.produto.nome}</p>
+                            <p className="text-xs text-muted-foreground">
+                              R$ {item.produto.preco.toFixed(2).replace('.', ',')} cada
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => removerItem(item.id)}
+                            className="text-muted-foreground hover:text-destructive transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => alterarQuantidade(item.id, -1)}
+                              className="w-8 h-8 rounded-lg bg-background flex items-center justify-center hover:bg-accent transition-colors"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <span className="w-8 text-center font-medium">{item.quantidade}</span>
+                            <button
+                              onClick={() => alterarQuantidade(item.id, 1)}
+                              className="w-8 h-8 rounded-lg bg-background flex items-center justify-center hover:bg-accent transition-colors"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <span className="font-semibold text-foreground">
+                            R$ {(item.produto.preco * item.quantidade).toFixed(2).replace('.', ',')}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Totais e Pagamento */}
+              {comandaAtual && comandaAtual.itens.length > 0 && (
+                <div className="p-4 border-t border-border bg-muted/30 space-y-4">
+                  {view === 'pagamento' && (
+                    <>
+                      {/* Desconto Geral */}
+                      <div className="flex items-center gap-2">
+                        <Percent className="w-4 h-4 text-muted-foreground" />
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={descontoGeral}
+                          onChange={(e) => setDescontoGeral(Number(e.target.value))}
+                          className="w-20 px-2 py-1 text-sm border border-input rounded"
+                        />
+                        <span className="text-sm text-muted-foreground">% desconto</span>
+                      </div>
+
+                      {/* Formas de Pagamento */}
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-foreground">Forma de pagamento:</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {formasPagamento.map((forma) => (
+                            <button
+                              key={forma.id}
+                              onClick={() => setFormaPagamento(forma.id)}
+                              className={cn(
+                                'p-2 md:p-3 rounded-lg flex flex-col items-center gap-1 transition-colors',
+                                formaPagamento === forma.id
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                              )}
+                            >
+                              <forma.icon className="w-4 md:w-5 h-4 md:h-5" />
+                              <span className="text-xs font-medium">{forma.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {formaPagamento && taxa > 0 && (
+                        <div className="p-3 bg-warning/10 rounded-lg text-sm">
+                          <div className="flex justify-between text-warning">
+                            <span>Taxa ({taxa}%)</span>
+                            <span>-R$ {valorTaxa.toFixed(2).replace('.', ',')}</span>
+                          </div>
+                          <div className="flex justify-between font-medium text-foreground mt-1">
+                            <span>Valor líquido</span>
+                            <span>R$ {valorLiquido.toFixed(2).replace('.', ',')}</span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Totais */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="text-foreground">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                    {descontoGeral > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-success">Desconto ({descontoGeral}%)</span>
+                        <span className="text-success">-R$ {valorDesconto.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-xl font-bold pt-2 border-t border-border">
+                      <span className="text-foreground">Total</span>
+                      <span className="text-primary">R$ {total.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                  </div>
+
+                  {/* Botões */}
+                  <div className="flex gap-2">
+                    {view === 'produtos' ? (
+                      <>
+                        <button
+                          onClick={cancelarComanda}
+                          className="btn-secondary flex-1 py-3 text-sm md:text-base"
+                        >
+                          <X className="w-4 h-4 mr-1 md:mr-2" />
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => setView('pagamento')}
+                          className="btn-primary flex-1 py-3 text-sm md:text-base"
+                        >
+                          <CreditCard className="w-4 h-4 mr-1 md:mr-2" />
+                          Fechar Conta
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setView('produtos')}
+                          className="btn-secondary flex-1 py-3"
+                        >
+                          Voltar
+                        </button>
+                        <button
+                          onClick={finalizarVenda}
+                          disabled={!formaPagamento}
+                          className="btn-success flex-1 py-3 text-base md:text-lg"
+                        >
+                          <Check className="w-5 h-5 mr-2" />
+                          Finalizar
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
-
-            {/* Totais e Pagamento */}
-            {comandaAtual && comandaAtual.itens.length > 0 && (
-              <div className="p-4 border-t border-border bg-muted/30 space-y-4">
-                {view === 'pagamento' && (
-                  <>
-                    {/* Desconto Geral */}
-                    <div className="flex items-center gap-2">
-                      <Percent className="w-4 h-4 text-muted-foreground" />
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={descontoGeral}
-                        onChange={(e) => setDescontoGeral(Number(e.target.value))}
-                        className="w-20 px-2 py-1 text-sm border border-input rounded"
-                      />
-                      <span className="text-sm text-muted-foreground">% desconto</span>
-                    </div>
-
-                    {/* Formas de Pagamento */}
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-foreground">Forma de pagamento:</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {formasPagamento.map((forma) => (
-                          <button
-                            key={forma.id}
-                            onClick={() => setFormaPagamento(forma.id)}
-                            className={cn(
-                              'p-3 rounded-lg flex flex-col items-center gap-1 transition-colors',
-                              formaPagamento === forma.id
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                            )}
-                          >
-                            <forma.icon className="w-5 h-5" />
-                            <span className="text-xs font-medium">{forma.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {formaPagamento && taxa > 0 && (
-                      <div className="p-3 bg-warning/10 rounded-lg text-sm">
-                        <div className="flex justify-between text-warning">
-                          <span>Taxa ({taxa}%)</span>
-                          <span>-R$ {valorTaxa.toFixed(2).replace('.', ',')}</span>
-                        </div>
-                        <div className="flex justify-between font-medium text-foreground mt-1">
-                          <span>Valor líquido</span>
-                          <span>R$ {valorLiquido.toFixed(2).replace('.', ',')}</span>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Totais */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span className="text-foreground">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
-                  </div>
-                  {descontoGeral > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-success">Desconto ({descontoGeral}%)</span>
-                      <span className="text-success">-R$ {valorDesconto.toFixed(2).replace('.', ',')}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-xl font-bold pt-2 border-t border-border">
-                    <span className="text-foreground">Total</span>
-                    <span className="text-primary">R$ {total.toFixed(2).replace('.', ',')}</span>
-                  </div>
-                </div>
-
-                {/* Botões */}
-                <div className="flex gap-2">
-                  {view === 'produtos' ? (
-                    <>
-                      <button
-                        onClick={cancelarComanda}
-                        className="btn-secondary flex-1 py-3"
-                      >
-                        <X className="w-4 h-4 mr-2" />
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={() => setView('pagamento')}
-                        className="btn-primary flex-1 py-3"
-                      >
-                        <CreditCard className="w-4 h-4 mr-2" />
-                        Fechar Conta
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => setView('produtos')}
-                        className="btn-secondary flex-1 py-3"
-                      >
-                        Voltar
-                      </button>
-                      <button
-                        onClick={finalizarVenda}
-                        disabled={!formaPagamento}
-                        className="btn-success flex-1 py-3 text-lg"
-                      >
-                        <Check className="w-5 h-5 mr-2" />
-                        Finalizar
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
