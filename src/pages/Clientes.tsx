@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { Plus, Search, Users, Phone, Mail, CreditCard, Gift, Star, MessageCircle } from 'lucide-react';
+import { Plus, Search, Users, Phone, Mail, CreditCard, Gift, Star, MessageCircle, Edit } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ClienteForm, ClienteFormData } from '@/components/forms/ClienteForm';
+import { useToast } from '@/hooks/use-toast';
 
 interface Cliente {
   id: string;
@@ -7,6 +10,8 @@ interface Cliente {
   cpfCnpj: string;
   telefone: string;
   email: string;
+  endereco?: string;
+  dataNascimento?: string;
   limiteCredito: number;
   saldoFiado: number;
   cashback: number;
@@ -23,8 +28,11 @@ const clientesDemo: Cliente[] = [
 ];
 
 export default function Clientes() {
+  const { toast } = useToast();
   const [busca, setBusca] = useState('');
-  const [clientes] = useState<Cliente[]>(clientesDemo);
+  const [clientes, setClientes] = useState<Cliente[]>(clientesDemo);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
 
   const clientesFiltrados = clientes.filter(
     (c) =>
@@ -32,6 +40,50 @@ export default function Clientes() {
       c.cpfCnpj.includes(busca) ||
       c.telefone.includes(busca)
   );
+
+  const handleCreateCliente = (data: ClienteFormData) => {
+    const novoCliente: Cliente = {
+      id: crypto.randomUUID(),
+      nome: data.nome,
+      cpfCnpj: data.cpfCnpj || '',
+      telefone: data.telefone || '',
+      email: data.email || '',
+      endereco: data.endereco,
+      dataNascimento: data.dataNascimento,
+      limiteCredito: data.limiteCredito,
+      saldoFiado: 0,
+      cashback: 0,
+      pontos: 0,
+      totalCompras: 0,
+      ultimaCompra: new Date().toISOString().split('T')[0],
+    };
+    setClientes([...clientes, novoCliente]);
+    setDialogOpen(false);
+    toast({ title: 'Cliente cadastrado', description: `${data.nome} foi adicionado.` });
+  };
+
+  const handleEditCliente = (data: ClienteFormData) => {
+    if (!editingCliente) return;
+    const clienteAtualizado: Cliente = {
+      ...editingCliente,
+      nome: data.nome,
+      cpfCnpj: data.cpfCnpj || '',
+      telefone: data.telefone || '',
+      email: data.email || '',
+      endereco: data.endereco,
+      dataNascimento: data.dataNascimento,
+      limiteCredito: data.limiteCredito,
+    };
+    setClientes(clientes.map(c => c.id === editingCliente.id ? clienteAtualizado : c));
+    setEditingCliente(null);
+    toast({ title: 'Cliente atualizado', description: `${data.nome} foi atualizado.` });
+  };
+
+  const handleWhatsApp = (cliente: Cliente) => {
+    const phone = cliente.telefone.replace(/\D/g, '');
+    const message = encodeURIComponent(`Olá ${cliente.nome}!`);
+    window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
+  };
 
   return (
     <div className="space-y-6">
@@ -41,7 +93,7 @@ export default function Clientes() {
           <h1 className="module-title">Clientes (CRM)</h1>
           <p className="text-muted-foreground">Gestão de relacionamento com clientes</p>
         </div>
-        <button className="btn-primary">
+        <button className="btn-primary" onClick={() => setDialogOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Novo Cliente
         </button>
@@ -106,7 +158,7 @@ export default function Clientes() {
       {/* Grid de Clientes */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {clientesFiltrados.map((cliente) => (
-          <div key={cliente.id} className="stat-card hover:border-primary/50 transition-colors cursor-pointer">
+          <div key={cliente.id} className="stat-card hover:border-primary/50 transition-colors">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -119,9 +171,20 @@ export default function Clientes() {
                   <p className="text-sm text-muted-foreground">{cliente.cpfCnpj}</p>
                 </div>
               </div>
-              <button className="p-2 hover:bg-success/10 rounded-lg transition-colors">
-                <MessageCircle className="w-5 h-5 text-success" />
-              </button>
+              <div className="flex gap-1">
+                <button 
+                  className="p-2 hover:bg-accent rounded-lg transition-colors"
+                  onClick={() => setEditingCliente(cliente)}
+                >
+                  <Edit className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <button 
+                  className="p-2 hover:bg-success/10 rounded-lg transition-colors"
+                  onClick={() => handleWhatsApp(cliente)}
+                >
+                  <MessageCircle className="w-5 h-5 text-success" />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-2 text-sm">
@@ -163,6 +226,43 @@ export default function Clientes() {
           </div>
         ))}
       </div>
+
+      {/* Dialog Novo Cliente */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Cliente</DialogTitle>
+          </DialogHeader>
+          <ClienteForm 
+            onSubmit={handleCreateCliente} 
+            onCancel={() => setDialogOpen(false)} 
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Editar Cliente */}
+      <Dialog open={!!editingCliente} onOpenChange={(open) => !open && setEditingCliente(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Cliente</DialogTitle>
+          </DialogHeader>
+          {editingCliente && (
+            <ClienteForm 
+              defaultValues={{
+                nome: editingCliente.nome,
+                cpfCnpj: editingCliente.cpfCnpj,
+                telefone: editingCliente.telefone,
+                email: editingCliente.email,
+                endereco: editingCliente.endereco,
+                dataNascimento: editingCliente.dataNascimento,
+                limiteCredito: editingCliente.limiteCredito,
+              }}
+              onSubmit={handleEditCliente} 
+              onCancel={() => setEditingCliente(null)} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

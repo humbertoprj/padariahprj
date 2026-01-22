@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { Plus, Search, Filter, Package, AlertTriangle, Edit, Trash2, MoreVertical, Barcode } from 'lucide-react';
+import { Plus, Search, Filter, Package, AlertTriangle, MoreVertical, Barcode, Edit, Trash2, Power } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { ProdutoForm, ProdutoFormData } from '@/components/forms/ProdutoForm';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { useToast } from '@/hooks/use-toast';
 
 interface Produto {
   id: string;
@@ -25,8 +30,13 @@ const produtosDemo: Produto[] = [
 ];
 
 export default function Estoque() {
+  const { toast } = useToast();
   const [busca, setBusca] = useState('');
-  const [produtos] = useState<Produto[]>(produtosDemo);
+  const [produtos, setProdutos] = useState<Produto[]>(produtosDemo);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingProduto, setEditingProduto] = useState<Produto | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [produtoToDelete, setProdutoToDelete] = useState<Produto | null>(null);
 
   const produtosFiltrados = produtos.filter(
     (p) =>
@@ -34,7 +44,74 @@ export default function Estoque() {
       p.codigoBarras.includes(busca)
   );
 
-  const produtosBaixoEstoque = produtos.filter((p) => p.estoqueAtual <= p.estoqueMinimo);
+  const produtosBaixoEstoque = produtos.filter((p) => p.estoqueAtual <= p.estoqueMinimo && p.ativo);
+
+  const handleCreateProduto = (data: ProdutoFormData) => {
+    const margem = data.custo > 0 ? ((data.preco - data.custo) / data.custo) * 100 : 0;
+    const novoProduto: Produto = {
+      id: crypto.randomUUID(),
+      nome: data.nome,
+      codigoBarras: data.codigoBarras || '',
+      categoria: data.categoria,
+      unidade: data.unidade,
+      custo: data.custo,
+      preco: data.preco,
+      margem,
+      estoqueAtual: data.estoqueAtual,
+      estoqueMinimo: data.estoqueMinimo,
+      fabricado: data.fabricado,
+      ativo: true,
+    };
+    setProdutos([...produtos, novoProduto]);
+    setDialogOpen(false);
+    toast({ title: 'Produto criado', description: `${data.nome} foi adicionado ao estoque.` });
+  };
+
+  const handleEditProduto = (data: ProdutoFormData) => {
+    if (!editingProduto) return;
+    const margem = data.custo > 0 ? ((data.preco - data.custo) / data.custo) * 100 : 0;
+    const produtoAtualizado: Produto = {
+      ...editingProduto,
+      nome: data.nome,
+      codigoBarras: data.codigoBarras || '',
+      categoria: data.categoria,
+      unidade: data.unidade,
+      custo: data.custo,
+      preco: data.preco,
+      margem,
+      estoqueAtual: data.estoqueAtual,
+      estoqueMinimo: data.estoqueMinimo,
+      fabricado: data.fabricado,
+    };
+    setProdutos(produtos.map(p => p.id === editingProduto.id ? produtoAtualizado : p));
+    setEditingProduto(null);
+    toast({ title: 'Produto atualizado', description: `${data.nome} foi atualizado.` });
+  };
+
+  const handleDeleteProduto = () => {
+    if (!produtoToDelete) return;
+    setProdutos(produtos.filter(p => p.id !== produtoToDelete.id));
+    setProdutoToDelete(null);
+    setDeleteDialogOpen(false);
+    toast({ title: 'Produto excluído', description: 'O produto foi removido do estoque.' });
+  };
+
+  const handleToggleAtivo = (produto: Produto) => {
+    setProdutos(produtos.map(p => p.id === produto.id ? { ...p, ativo: !p.ativo } : p));
+    toast({ 
+      title: produto.ativo ? 'Produto desativado' : 'Produto ativado', 
+      description: `${produto.nome} foi ${produto.ativo ? 'desativado' : 'ativado'}.` 
+    });
+  };
+
+  const openEditDialog = (produto: Produto) => {
+    setEditingProduto(produto);
+  };
+
+  const openDeleteDialog = (produto: Produto) => {
+    setProdutoToDelete(produto);
+    setDeleteDialogOpen(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -44,7 +121,7 @@ export default function Estoque() {
           <h1 className="module-title">Estoque</h1>
           <p className="text-muted-foreground">Gerencie seus produtos e controle de estoque</p>
         </div>
-        <button className="btn-primary">
+        <button className="btn-primary" onClick={() => setDialogOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Novo Produto
         </button>
@@ -166,15 +243,87 @@ export default function Estoque() {
                   </span>
                 </td>
                 <td>
-                  <button className="p-2 hover:bg-accent rounded-lg transition-colors">
-                    <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="p-2 hover:bg-accent rounded-lg transition-colors">
+                        <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => openEditDialog(produto)}>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleToggleAtivo(produto)}>
+                        <Power className="w-4 h-4 mr-2" />
+                        {produto.ativo ? 'Desativar' : 'Ativar'}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        onClick={() => openDeleteDialog(produto)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Excluir
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Dialog Novo Produto */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Novo Produto</DialogTitle>
+          </DialogHeader>
+          <ProdutoForm 
+            onSubmit={handleCreateProduto} 
+            onCancel={() => setDialogOpen(false)} 
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Editar Produto */}
+      <Dialog open={!!editingProduto} onOpenChange={(open) => !open && setEditingProduto(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar Produto</DialogTitle>
+          </DialogHeader>
+          {editingProduto && (
+            <ProdutoForm 
+              defaultValues={{
+                nome: editingProduto.nome,
+                codigoBarras: editingProduto.codigoBarras,
+                categoria: editingProduto.categoria,
+                unidade: editingProduto.unidade,
+                custo: editingProduto.custo,
+                preco: editingProduto.preco,
+                estoqueAtual: editingProduto.estoqueAtual,
+                estoqueMinimo: editingProduto.estoqueMinimo,
+                fabricado: editingProduto.fabricado,
+              }}
+              onSubmit={handleEditProduto} 
+              onCancel={() => setEditingProduto(null)} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Excluir Produto"
+        description={`Tem certeza que deseja excluir "${produtoToDelete?.nome}"? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir"
+        onConfirm={handleDeleteProduto}
+        variant="destructive"
+      />
     </div>
   );
 }
