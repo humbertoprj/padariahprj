@@ -159,14 +159,14 @@ export default function PDV() {
           </Link>
           <div className="h-6 w-px bg-sidebar-border" />
           <div className="flex items-center gap-2">
-            {empresa.logoUrl ? (
+          {empresa?.logoUrl ? (
               <img src={empresa.logoUrl} alt={empresa.nome} className="w-8 h-8 rounded object-cover" />
             ) : (
               <div className="w-8 h-8 rounded bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground font-bold text-sm">
-                {empresa.nome.charAt(0)}
+                {empresa?.nome?.charAt(0) || 'E'}
               </div>
             )}
-            <span className="text-sidebar-foreground font-semibold">{empresa.nome}</span>
+            <span className="text-sidebar-foreground font-semibold">{empresa?.nome || 'Empresa'}</span>
           </div>
         </div>
         <div className="flex items-center gap-4">
