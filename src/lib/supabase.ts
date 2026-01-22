@@ -1,7 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = 'https://supabase.hprj.shop';
-const supabaseAnonKey = 'your-anon-key-here'; // Você precisará configurar isso
+const supabaseUrl = "https://supabase.hprj.shop";
+const supabaseAnonKey =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzY5MDk3Njg2LCJleHAiOjIwODQ2NzM2ODZ9.oVGI5fQdRDT_bFNgzpv7qSskJvFWUbb2Y0aVEkJ69qs";
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -22,8 +23,8 @@ export type Database = {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['empresas']['Row'], 'id' | 'created_at' | 'updated_at'>;
-        Update: Partial<Database['public']['Tables']['empresas']['Insert']>;
+        Insert: Omit<Database["public"]["Tables"]["empresas"]["Row"], "id" | "created_at" | "updated_at">;
+        Update: Partial<Database["public"]["Tables"]["empresas"]["Insert"]>;
       };
       produtos: {
         Row: {
@@ -43,8 +44,8 @@ export type Database = {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['produtos']['Row'], 'id' | 'created_at' | 'updated_at'>;
-        Update: Partial<Database['public']['Tables']['produtos']['Insert']>;
+        Insert: Omit<Database["public"]["Tables"]["produtos"]["Row"], "id" | "created_at" | "updated_at">;
+        Update: Partial<Database["public"]["Tables"]["produtos"]["Insert"]>;
       };
       clientes: {
         Row: {
@@ -63,8 +64,8 @@ export type Database = {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['clientes']['Row'], 'id' | 'created_at' | 'updated_at'>;
-        Update: Partial<Database['public']['Tables']['clientes']['Insert']>;
+        Insert: Omit<Database["public"]["Tables"]["clientes"]["Row"], "id" | "created_at" | "updated_at">;
+        Update: Partial<Database["public"]["Tables"]["clientes"]["Insert"]>;
       };
       vendas: {
         Row: {
@@ -81,8 +82,8 @@ export type Database = {
           status: string;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['vendas']['Row'], 'id' | 'created_at'>;
-        Update: Partial<Database['public']['Tables']['vendas']['Insert']>;
+        Insert: Omit<Database["public"]["Tables"]["vendas"]["Row"], "id" | "created_at">;
+        Update: Partial<Database["public"]["Tables"]["vendas"]["Insert"]>;
       };
     };
   };
