@@ -74,7 +74,7 @@ const formasPagamento = [
 ];
 
 // Gerar array de comandas 1-100
-const TOTAL_COMANDAS = 30;
+const TOTAL_COMANDAS = 50;
 
 export default function PDV() {
   const { empresa, configFinanceira } = useEmpresa();
