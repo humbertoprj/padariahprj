@@ -13,7 +13,10 @@ import {
   X,
   ArrowLeft,
   Percent,
-  Gift,
+  Receipt,
+  Check,
+  Package,
+  ShoppingCart,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useEmpresa } from '@/contexts/EmpresaContext';
@@ -28,10 +31,20 @@ interface Produto {
   estoque: number;
 }
 
-interface ItemCarrinho {
+interface ItemComanda {
+  id: string;
   produto: Produto;
   quantidade: number;
   desconto: number;
+  observacao?: string;
+}
+
+interface Comanda {
+  numero: number;
+  clienteNome: string;
+  itens: ItemComanda[];
+  status: 'aberta' | 'fechada';
+  createdAt: Date;
 }
 
 const produtosDemo: Produto[] = [
@@ -60,16 +73,22 @@ const formasPagamento = [
   { id: 'fiado', label: 'Fiado', icon: User },
 ];
 
+// Gerar array de comandas 1-100
+const TOTAL_COMANDAS = 100;
+
 export default function PDV() {
   const { empresa, configFinanceira } = useEmpresa();
+  const [view, setView] = useState<'comandas' | 'produtos' | 'pagamento'>('comandas');
+  const [comandas, setComandas] = useState<Map<number, Comanda>>(new Map());
+  const [comandaSelecionada, setComandaSelecionada] = useState<number | null>(null);
   const [busca, setBusca] = useState('');
+  const [buscaComanda, setBuscaComanda] = useState('');
   const [categoriaSelecionada, setCategoriaSelecionada] = useState('Todas');
-  const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [formaPagamento, setFormaPagamento] = useState<string | null>(null);
   const [descontoGeral, setDescontoGeral] = useState(0);
-  const [clienteSelecionado, setClienteSelecionado] = useState<string | null>(null);
-  const [showPagamento, setShowPagamento] = useState(false);
+  const [nomeCliente, setNomeCliente] = useState('');
 
+  // Filtrar produtos
   const produtosFiltrados = useMemo(() => {
     return produtosDemo.filter((produto) => {
       const matchBusca =
@@ -80,56 +99,26 @@ export default function PDV() {
     });
   }, [busca, categoriaSelecionada]);
 
-  const adicionarAoCarrinho = (produto: Produto) => {
-    const existente = carrinho.find((item) => item.produto.id === produto.id);
-    if (existente) {
-      setCarrinho(
-        carrinho.map((item) =>
-          item.produto.id === produto.id ? { ...item, quantidade: item.quantidade + 1 } : item
-        )
-      );
-    } else {
-      setCarrinho([...carrinho, { produto, quantidade: 1, desconto: 0 }]);
-    }
-  };
+  // Obter comanda atual
+  const comandaAtual = comandaSelecionada ? comandas.get(comandaSelecionada) : null;
 
-  const alterarQuantidade = (produtoId: string, delta: number) => {
-    setCarrinho(
-      carrinho
-        .map((item) =>
-          item.produto.id === produtoId
-            ? { ...item, quantidade: Math.max(0, item.quantidade + delta) }
-            : item
-        )
-        .filter((item) => item.quantidade > 0)
-    );
-  };
-
-  const removerDoCarrinho = (produtoId: string) => {
-    setCarrinho(carrinho.filter((item) => item.produto.id !== produtoId));
-  };
-
-  const subtotal = carrinho.reduce((total, item) => {
+  // Calcular totais da comanda
+  const subtotal = comandaAtual?.itens.reduce((total, item) => {
     const valorItem = item.produto.preco * item.quantidade;
     const desconto = (valorItem * item.desconto) / 100;
     return total + (valorItem - desconto);
-  }, 0);
+  }, 0) || 0;
 
   const valorDesconto = (subtotal * descontoGeral) / 100;
   const total = subtotal - valorDesconto;
 
   const getTaxaOperadora = () => {
     switch (formaPagamento) {
-      case 'debito':
-        return configFinanceira.taxaDebito;
-      case 'credito':
-        return configFinanceira.taxaCreditoVista;
-      case 'pix':
-        return configFinanceira.taxaPix;
-      case 'voucher':
-        return configFinanceira.taxaVoucher;
-      default:
-        return 0;
+      case 'debito': return configFinanceira.taxaDebito;
+      case 'credito': return configFinanceira.taxaCreditoVista;
+      case 'pix': return configFinanceira.taxaPix;
+      case 'voucher': return configFinanceira.taxaVoucher;
+      default: return 0;
     }
   };
 
@@ -137,13 +126,115 @@ export default function PDV() {
   const valorTaxa = (total * taxa) / 100;
   const valorLiquido = total - valorTaxa;
 
+  // Abrir/Selecionar comanda
+  const selecionarComanda = (numero: number) => {
+    if (!comandas.has(numero)) {
+      // Criar nova comanda
+      setComandas(new Map(comandas.set(numero, {
+        numero,
+        clienteNome: '',
+        itens: [],
+        status: 'aberta',
+        createdAt: new Date(),
+      })));
+    }
+    setComandaSelecionada(numero);
+    setView('produtos');
+    setDescontoGeral(0);
+    setFormaPagamento(null);
+  };
+
+  // Adicionar produto à comanda
+  const adicionarProduto = (produto: Produto) => {
+    if (!comandaSelecionada || !comandaAtual) return;
+
+    const itemExistente = comandaAtual.itens.find(i => i.produto.id === produto.id);
+    
+    if (itemExistente) {
+      const novosItens = comandaAtual.itens.map(item =>
+        item.produto.id === produto.id
+          ? { ...item, quantidade: item.quantidade + 1 }
+          : item
+      );
+      setComandas(new Map(comandas.set(comandaSelecionada, { ...comandaAtual, itens: novosItens })));
+    } else {
+      const novoItem: ItemComanda = {
+        id: crypto.randomUUID(),
+        produto,
+        quantidade: 1,
+        desconto: 0,
+      };
+      setComandas(new Map(comandas.set(comandaSelecionada, {
+        ...comandaAtual,
+        itens: [...comandaAtual.itens, novoItem],
+      })));
+    }
+  };
+
+  // Alterar quantidade
+  const alterarQuantidade = (itemId: string, delta: number) => {
+    if (!comandaSelecionada || !comandaAtual) return;
+
+    const novosItens = comandaAtual.itens
+      .map(item => item.id === itemId ? { ...item, quantidade: Math.max(0, item.quantidade + delta) } : item)
+      .filter(item => item.quantidade > 0);
+
+    setComandas(new Map(comandas.set(comandaSelecionada, { ...comandaAtual, itens: novosItens })));
+  };
+
+  // Remover item
+  const removerItem = (itemId: string) => {
+    if (!comandaSelecionada || !comandaAtual) return;
+    const novosItens = comandaAtual.itens.filter(item => item.id !== itemId);
+    setComandas(new Map(comandas.set(comandaSelecionada, { ...comandaAtual, itens: novosItens })));
+  };
+
+  // Atualizar nome do cliente
+  const atualizarNomeCliente = (nome: string) => {
+    if (!comandaSelecionada || !comandaAtual) return;
+    setComandas(new Map(comandas.set(comandaSelecionada, { ...comandaAtual, clienteNome: nome })));
+  };
+
+  // Finalizar venda
   const finalizarVenda = () => {
-    alert('Venda finalizada com sucesso!');
-    setCarrinho([]);
+    if (!comandaSelecionada || !comandaAtual) return;
+    
+    // Fechar comanda
+    const comandaFechada = { ...comandaAtual, status: 'fechada' as const };
+    const novasComandas = new Map(comandas);
+    novasComandas.delete(comandaSelecionada);
+    setComandas(novasComandas);
+    
+    alert(`Comanda ${comandaSelecionada} finalizada!\nValor: R$ ${total.toFixed(2).replace('.', ',')}\nForma: ${formaPagamento}`);
+    
+    setComandaSelecionada(null);
+    setView('comandas');
     setFormaPagamento(null);
     setDescontoGeral(0);
-    setShowPagamento(false);
   };
+
+  // Cancelar comanda
+  const cancelarComanda = () => {
+    if (!comandaSelecionada) return;
+    if (confirm(`Deseja cancelar a comanda ${comandaSelecionada}?`)) {
+      const novasComandas = new Map(comandas);
+      novasComandas.delete(comandaSelecionada);
+      setComandas(novasComandas);
+      setComandaSelecionada(null);
+      setView('comandas');
+    }
+  };
+
+  // Comandas abertas
+  const comandasAbertas = Array.from(comandas.values()).filter(c => c.status === 'aberta');
+
+  // Filtrar comandas na busca
+  const comandasFiltradas = buscaComanda
+    ? Array.from({ length: TOTAL_COMANDAS }, (_, i) => i + 1).filter(n => 
+        n.toString().includes(buscaComanda) || 
+        comandas.get(n)?.clienteNome.toLowerCase().includes(buscaComanda.toLowerCase())
+      )
+    : Array.from({ length: TOTAL_COMANDAS }, (_, i) => i + 1);
 
   return (
     <div className="fixed inset-0 bg-background flex flex-col">
@@ -155,21 +246,23 @@ export default function PDV() {
             className="flex items-center gap-2 text-sidebar-foreground hover:text-sidebar-primary-foreground transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm font-medium">Voltar ao Dashboard</span>
+            <span className="text-sm font-medium">Dashboard</span>
           </Link>
           <div className="h-6 w-px bg-sidebar-border" />
           <div className="flex items-center gap-2">
-          {empresa?.logoUrl ? (
-              <img src={empresa.logoUrl} alt={empresa.nome} className="w-8 h-8 rounded object-cover" />
-            ) : (
-              <div className="w-8 h-8 rounded bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground font-bold text-sm">
-                {empresa?.nome?.charAt(0) || 'E'}
-              </div>
-            )}
+            <div className="w-8 h-8 rounded bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground font-bold text-sm">
+              {empresa?.nome?.charAt(0) || 'E'}
+            </div>
             <span className="text-sidebar-foreground font-semibold">{empresa?.nome || 'Empresa'}</span>
           </div>
         </div>
         <div className="flex items-center gap-4">
+          {comandaSelecionada && (
+            <div className="flex items-center gap-2 bg-primary/20 px-3 py-1.5 rounded-lg">
+              <Receipt className="w-4 h-4 text-primary" />
+              <span className="text-primary font-bold">Comanda {comandaSelecionada}</span>
+            </div>
+          )}
           <span className="text-sidebar-foreground/60 text-sm">
             {new Date().toLocaleDateString('pt-BR')} - {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           </span>
@@ -177,253 +270,325 @@ export default function PDV() {
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Área de Produtos */}
+      {/* Conteúdo Principal */}
+      {view === 'comandas' && (
         <div className="flex-1 flex flex-col p-4 overflow-hidden">
-          {/* Busca e Filtros */}
-          <div className="flex gap-4 mb-4">
-            <div className="relative flex-1">
-              <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          {/* Header das Comandas */}
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-2xl font-bold text-foreground">Selecione uma Comanda</h2>
+              <p className="text-muted-foreground">
+                {comandasAbertas.length} comanda(s) aberta(s) • Total: R$ {comandasAbertas.reduce((t, c) => t + (c.itens.reduce((s, i) => s + i.produto.preco * i.quantidade, 0)), 0).toFixed(2).replace('.', ',')}
+              </p>
+            </div>
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Buscar por nome ou código de barras..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="input-field pl-11 text-lg"
-                autoFocus
+                placeholder="Buscar comanda..."
+                value={buscaComanda}
+                onChange={(e) => setBuscaComanda(e.target.value)}
+                className="input-field pl-10"
               />
             </div>
           </div>
 
-          {/* Categorias */}
-          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-            {categorias.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setCategoriaSelecionada(cat)}
-                className={cn(
-                  'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
-                  categoriaSelecionada === cat
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                )}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {/* Grid de Produtos */}
+          {/* Grid de Comandas */}
           <div className="flex-1 overflow-y-auto scrollbar-thin">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-              {produtosFiltrados.map((produto) => (
+            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 xl:grid-cols-15 gap-2">
+              {comandasFiltradas.map((numero) => {
+                const comanda = comandas.get(numero);
+                const temItens = comanda && comanda.itens.length > 0;
+                const valorComanda = comanda?.itens.reduce((t, i) => t + i.produto.preco * i.quantidade, 0) || 0;
+
+                return (
+                  <button
+                    key={numero}
+                    onClick={() => selecionarComanda(numero)}
+                    className={cn(
+                      'aspect-square rounded-xl flex flex-col items-center justify-center gap-1 font-bold transition-all hover:scale-105',
+                      temItens
+                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
+                        : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )}
+                  >
+                    <span className="text-2xl">{numero}</span>
+                    {temItens && (
+                      <span className="text-xs opacity-80">
+                        R$ {valorComanda.toFixed(0)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(view === 'produtos' || view === 'pagamento') && (
+        <div className="flex-1 flex overflow-hidden">
+          {/* Área de Produtos */}
+          <div className="flex-1 flex flex-col p-4 overflow-hidden">
+            {/* Busca e Filtros */}
+            <div className="flex gap-4 mb-4">
+              <button
+                onClick={() => {
+                  setComandaSelecionada(null);
+                  setView('comandas');
+                }}
+                className="btn-secondary"
+              >
+                <Receipt className="w-4 h-4 mr-2" />
+                Comandas
+              </button>
+              <div className="relative flex-1">
+                <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Buscar por nome ou código de barras..."
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  className="input-field pl-11 text-lg"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Categorias */}
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+              {categorias.map((cat) => (
                 <button
-                  key={produto.id}
-                  onClick={() => adicionarAoCarrinho(produto)}
-                  className="pdv-product-card text-left"
+                  key={cat}
+                  onClick={() => setCategoriaSelecionada(cat)}
+                  className={cn(
+                    'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
+                    categoriaSelecionada === cat
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                  )}
                 >
-                  <div className="aspect-square bg-muted rounded-lg mb-2 flex items-center justify-center">
-                    <Package className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm font-medium text-foreground line-clamp-2">{produto.nome}</p>
-                  <p className="text-xs text-muted-foreground">{produto.categoria}</p>
-                  <p className="text-lg font-bold text-primary mt-1">
-                    R$ {produto.preco.toFixed(2).replace('.', ',')}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Estoque: {produto.estoque}</p>
+                  {cat}
                 </button>
               ))}
             </div>
-          </div>
-        </div>
 
-        {/* Carrinho */}
-        <div className="w-96 bg-card border-l border-border flex flex-col">
-          {/* Header do Carrinho */}
-          <div className="p-4 border-b border-border">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-foreground">Carrinho</h2>
-              <span className="text-sm text-muted-foreground">{carrinho.length} itens</span>
-            </div>
-            {clienteSelecionado && (
-              <div className="flex items-center gap-2 mt-2 p-2 bg-accent rounded-lg">
-                <User className="w-4 h-4 text-accent-foreground" />
-                <span className="text-sm text-accent-foreground">{clienteSelecionado}</span>
-                <button onClick={() => setClienteSelecionado(null)} className="ml-auto">
-                  <X className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Lista de Itens */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin">
-            {carrinho.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                <ShoppingCart className="w-16 h-16 mb-4" />
-                <p>Carrinho vazio</p>
-                <p className="text-sm">Adicione produtos para começar</p>
-              </div>
-            ) : (
-              <div className="p-4 space-y-2">
-                {carrinho.map((item) => (
-                  <div key={item.produto.id} className="bg-muted/50 rounded-lg p-3">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-foreground">{item.produto.nome}</p>
-                        <p className="text-xs text-muted-foreground">
-                          R$ {item.produto.preco.toFixed(2).replace('.', ',')} cada
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => removerDoCarrinho(item.produto.id)}
-                        className="text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+            {/* Grid de Produtos */}
+            <div className="flex-1 overflow-y-auto scrollbar-thin">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                {produtosFiltrados.map((produto) => (
+                  <button
+                    key={produto.id}
+                    onClick={() => adicionarProduto(produto)}
+                    className="pdv-product-card text-left"
+                  >
+                    <div className="aspect-square bg-muted rounded-lg mb-2 flex items-center justify-center">
+                      <Package className="w-8 h-8 text-muted-foreground" />
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => alterarQuantidade(item.produto.id, -1)}
-                          className="w-8 h-8 rounded-lg bg-background flex items-center justify-center hover:bg-accent transition-colors"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="w-8 text-center font-medium">{item.quantidade}</span>
-                        <button
-                          onClick={() => alterarQuantidade(item.produto.id, 1)}
-                          className="w-8 h-8 rounded-lg bg-background flex items-center justify-center hover:bg-accent transition-colors"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <span className="font-semibold text-foreground">
-                        R$ {(item.produto.preco * item.quantidade).toFixed(2).replace('.', ',')}
-                      </span>
-                    </div>
-                  </div>
+                    <p className="text-sm font-medium text-foreground line-clamp-2">{produto.nome}</p>
+                    <p className="text-xs text-muted-foreground">{produto.categoria}</p>
+                    <p className="text-lg font-bold text-primary mt-1">
+                      R$ {produto.preco.toFixed(2).replace('.', ',')}
+                    </p>
+                  </button>
                 ))}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Totais e Pagamento */}
-          {carrinho.length > 0 && (
-            <div className="p-4 border-t border-border bg-muted/30 space-y-4">
-              {/* Desconto Geral */}
+          {/* Painel da Comanda */}
+          <div className="w-96 bg-card border-l border-border flex flex-col">
+            {/* Header da Comanda */}
+            <div className="p-4 border-b border-border bg-primary/5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-primary" />
+                  <h2 className="text-xl font-bold text-foreground">Comanda {comandaSelecionada}</h2>
+                </div>
+                <span className="text-sm text-muted-foreground">{comandaAtual?.itens.length || 0} itens</span>
+              </div>
+              {/* Nome do Cliente */}
               <div className="flex items-center gap-2">
-                <Percent className="w-4 h-4 text-muted-foreground" />
+                <User className="w-4 h-4 text-muted-foreground" />
                 <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={descontoGeral}
-                  onChange={(e) => setDescontoGeral(Number(e.target.value))}
-                  className="w-20 px-2 py-1 text-sm border border-input rounded"
-                  placeholder="0"
+                  type="text"
+                  placeholder="Nome do cliente (opcional)"
+                  value={comandaAtual?.clienteNome || ''}
+                  onChange={(e) => atualizarNomeCliente(e.target.value)}
+                  className="flex-1 bg-transparent border-b border-border text-sm py-1 focus:outline-none focus:border-primary"
                 />
-                <span className="text-sm text-muted-foreground">% desconto</span>
-              </div>
-
-              {/* Totais */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="text-foreground">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
-                </div>
-                {descontoGeral > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-success">Desconto ({descontoGeral}%)</span>
-                    <span className="text-success">-R$ {valorDesconto.toFixed(2).replace('.', ',')}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
-                  <span className="text-foreground">Total</span>
-                  <span className="text-primary">R$ {total.toFixed(2).replace('.', ',')}</span>
-                </div>
-              </div>
-
-              {/* Formas de Pagamento */}
-              {showPagamento && (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-foreground">Forma de pagamento:</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {formasPagamento.map((forma) => (
-                      <button
-                        key={forma.id}
-                        onClick={() => setFormaPagamento(forma.id)}
-                        className={cn(
-                          'p-3 rounded-lg flex flex-col items-center gap-1 transition-colors',
-                          formaPagamento === forma.id
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                        )}
-                      >
-                        <forma.icon className="w-5 h-5" />
-                        <span className="text-xs font-medium">{forma.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                  {formaPagamento && taxa > 0 && (
-                    <div className="p-3 bg-warning/10 rounded-lg text-sm">
-                      <div className="flex justify-between text-warning">
-                        <span>Taxa ({taxa}%)</span>
-                        <span>-R$ {valorTaxa.toFixed(2).replace('.', ',')}</span>
-                      </div>
-                      <div className="flex justify-between font-medium text-foreground mt-1">
-                        <span>Valor líquido</span>
-                        <span>R$ {valorLiquido.toFixed(2).replace('.', ',')}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Botões */}
-              <div className="flex gap-2">
-                {!showPagamento ? (
-                  <button
-                    onClick={() => setShowPagamento(true)}
-                    className="btn-primary flex-1 py-4 text-lg"
-                  >
-                    Pagamento
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => setShowPagamento(false)}
-                      className="btn-secondary flex-1 py-4"
-                    >
-                      Voltar
-                    </button>
-                    <button
-                      onClick={finalizarVenda}
-                      disabled={!formaPagamento}
-                      className="btn-success flex-1 py-4 text-lg"
-                    >
-                      Finalizar
-                    </button>
-                  </>
-                )}
               </div>
             </div>
-          )}
+
+            {/* Lista de Itens */}
+            <div className="flex-1 overflow-y-auto scrollbar-thin">
+              {!comandaAtual?.itens.length ? (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                  <ShoppingCart className="w-16 h-16 mb-4" />
+                  <p>Comanda vazia</p>
+                  <p className="text-sm">Adicione produtos</p>
+                </div>
+              ) : (
+                <div className="p-4 space-y-2">
+                  {comandaAtual.itens.map((item) => (
+                    <div key={item.id} className="bg-muted/50 rounded-lg p-3">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-foreground">{item.produto.nome}</p>
+                          <p className="text-xs text-muted-foreground">
+                            R$ {item.produto.preco.toFixed(2).replace('.', ',')} cada
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => removerItem(item.id)}
+                          className="text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => alterarQuantidade(item.id, -1)}
+                            className="w-8 h-8 rounded-lg bg-background flex items-center justify-center hover:bg-accent transition-colors"
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <span className="w-8 text-center font-medium">{item.quantidade}</span>
+                          <button
+                            onClick={() => alterarQuantidade(item.id, 1)}
+                            className="w-8 h-8 rounded-lg bg-background flex items-center justify-center hover:bg-accent transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <span className="font-semibold text-foreground">
+                          R$ {(item.produto.preco * item.quantidade).toFixed(2).replace('.', ',')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Totais e Pagamento */}
+            {comandaAtual && comandaAtual.itens.length > 0 && (
+              <div className="p-4 border-t border-border bg-muted/30 space-y-4">
+                {view === 'pagamento' && (
+                  <>
+                    {/* Desconto Geral */}
+                    <div className="flex items-center gap-2">
+                      <Percent className="w-4 h-4 text-muted-foreground" />
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={descontoGeral}
+                        onChange={(e) => setDescontoGeral(Number(e.target.value))}
+                        className="w-20 px-2 py-1 text-sm border border-input rounded"
+                      />
+                      <span className="text-sm text-muted-foreground">% desconto</span>
+                    </div>
+
+                    {/* Formas de Pagamento */}
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-foreground">Forma de pagamento:</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {formasPagamento.map((forma) => (
+                          <button
+                            key={forma.id}
+                            onClick={() => setFormaPagamento(forma.id)}
+                            className={cn(
+                              'p-3 rounded-lg flex flex-col items-center gap-1 transition-colors',
+                              formaPagamento === forma.id
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                            )}
+                          >
+                            <forma.icon className="w-5 h-5" />
+                            <span className="text-xs font-medium">{forma.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {formaPagamento && taxa > 0 && (
+                      <div className="p-3 bg-warning/10 rounded-lg text-sm">
+                        <div className="flex justify-between text-warning">
+                          <span>Taxa ({taxa}%)</span>
+                          <span>-R$ {valorTaxa.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                        <div className="flex justify-between font-medium text-foreground mt-1">
+                          <span>Valor líquido</span>
+                          <span>R$ {valorLiquido.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Totais */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-foreground">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                  </div>
+                  {descontoGeral > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-success">Desconto ({descontoGeral}%)</span>
+                      <span className="text-success">-R$ {valorDesconto.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-xl font-bold pt-2 border-t border-border">
+                    <span className="text-foreground">Total</span>
+                    <span className="text-primary">R$ {total.toFixed(2).replace('.', ',')}</span>
+                  </div>
+                </div>
+
+                {/* Botões */}
+                <div className="flex gap-2">
+                  {view === 'produtos' ? (
+                    <>
+                      <button
+                        onClick={cancelarComanda}
+                        className="btn-secondary flex-1 py-3"
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => setView('pagamento')}
+                        className="btn-primary flex-1 py-3"
+                      >
+                        <CreditCard className="w-4 h-4 mr-2" />
+                        Fechar Conta
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setView('produtos')}
+                        className="btn-secondary flex-1 py-3"
+                      >
+                        Voltar
+                      </button>
+                      <button
+                        onClick={finalizarVenda}
+                        disabled={!formaPagamento}
+                        className="btn-success flex-1 py-3 text-lg"
+                      >
+                        <Check className="w-5 h-5 mr-2" />
+                        Finalizar
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
-
-// Adicionar ícone de carrinho caso não exista
-const ShoppingCart = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-  </svg>
-);
-
-const Package = ({ className }: { className?: string }) => (
-  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-  </svg>
-);
