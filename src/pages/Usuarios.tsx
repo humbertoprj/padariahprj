@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { Plus, Search, Shield, User, Eye, EyeOff, Edit, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { UsuarioForm, UsuarioFormData } from '@/components/forms/UsuarioForm';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { useToast } from '@/hooks/use-toast';
 
 interface Usuario {
   id: string;
   nome: string;
   email: string;
+  telefone?: string;
   perfil: 'admin' | 'caixa' | 'vendedor' | 'estoquista' | 'financeiro' | 'producao';
   ativo: boolean;
   ultimoAcesso: string;
@@ -40,15 +45,62 @@ const permissoes = [
 ];
 
 export default function Usuarios() {
+  const { toast } = useToast();
   const [busca, setBusca] = useState('');
-  const [usuarios] = useState<Usuario[]>(usuariosDemo);
+  const [usuarios, setUsuarios] = useState<Usuario[]>(usuariosDemo);
   const [showPermissoes, setShowPermissoes] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [usuarioToDelete, setUsuarioToDelete] = useState<Usuario | null>(null);
 
   const usuariosFiltrados = usuarios.filter(
     (u) =>
       u.nome.toLowerCase().includes(busca.toLowerCase()) ||
       u.email.toLowerCase().includes(busca.toLowerCase())
   );
+
+  const handleCreateUsuario = (data: UsuarioFormData) => {
+    const novoUsuario: Usuario = {
+      id: crypto.randomUUID(),
+      nome: data.nome,
+      email: data.email,
+      telefone: data.telefone,
+      perfil: data.perfil,
+      ativo: true,
+      ultimoAcesso: new Date().toISOString(),
+    };
+    setUsuarios([...usuarios, novoUsuario]);
+    setDialogOpen(false);
+    toast({ title: 'Usuário criado', description: `${data.nome} foi adicionado ao sistema.` });
+  };
+
+  const handleEditUsuario = (data: UsuarioFormData) => {
+    if (!editingUsuario) return;
+    const usuarioAtualizado: Usuario = {
+      ...editingUsuario,
+      nome: data.nome,
+      email: data.email,
+      telefone: data.telefone,
+      perfil: data.perfil,
+    };
+    setUsuarios(usuarios.map(u => u.id === editingUsuario.id ? usuarioAtualizado : u));
+    setEditingUsuario(null);
+    toast({ title: 'Usuário atualizado', description: `${data.nome} foi atualizado.` });
+  };
+
+  const handleDeleteUsuario = () => {
+    if (!usuarioToDelete) return;
+    setUsuarios(usuarios.filter(u => u.id !== usuarioToDelete.id));
+    setUsuarioToDelete(null);
+    setDeleteDialogOpen(false);
+    toast({ title: 'Usuário removido', description: 'O usuário foi removido do sistema.' });
+  };
+
+  const openDeleteDialog = (usuario: Usuario) => {
+    setUsuarioToDelete(usuario);
+    setDeleteDialogOpen(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -66,7 +118,7 @@ export default function Usuarios() {
             <Shield className="w-4 h-4 mr-2" />
             {showPermissoes ? 'Ver Usuários' : 'Ver Permissões'}
           </button>
-          <button className="btn-primary">
+          <button className="btn-primary" onClick={() => setDialogOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Novo Usuário
           </button>
@@ -147,10 +199,16 @@ export default function Usuarios() {
                     </td>
                     <td>
                       <div className="flex gap-1">
-                        <button className="p-2 hover:bg-accent rounded-lg transition-colors">
+                        <button 
+                          className="p-2 hover:bg-accent rounded-lg transition-colors"
+                          onClick={() => setEditingUsuario(usuario)}
+                        >
                           <Edit className="w-4 h-4 text-muted-foreground" />
                         </button>
-                        <button className="p-2 hover:bg-destructive/10 rounded-lg transition-colors">
+                        <button 
+                          className="p-2 hover:bg-destructive/10 rounded-lg transition-colors"
+                          onClick={() => openDeleteDialog(usuario)}
+                        >
                           <Trash2 className="w-4 h-4 text-destructive" />
                         </button>
                       </div>
@@ -197,6 +255,52 @@ export default function Usuarios() {
           </table>
         </div>
       )}
+
+      {/* Dialog Novo Usuário */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Usuário</DialogTitle>
+          </DialogHeader>
+          <UsuarioForm 
+            onSubmit={handleCreateUsuario} 
+            onCancel={() => setDialogOpen(false)} 
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Editar Usuário */}
+      <Dialog open={!!editingUsuario} onOpenChange={(open) => !open && setEditingUsuario(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Usuário</DialogTitle>
+          </DialogHeader>
+          {editingUsuario && (
+            <UsuarioForm 
+              defaultValues={{
+                nome: editingUsuario.nome,
+                email: editingUsuario.email,
+                telefone: editingUsuario.telefone,
+                perfil: editingUsuario.perfil,
+              }}
+              onSubmit={handleEditUsuario} 
+              onCancel={() => setEditingUsuario(null)}
+              isEdit
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Remover Usuário"
+        description={`Tem certeza que deseja remover "${usuarioToDelete?.nome}"? Esta ação não pode ser desfeita.`}
+        confirmText="Remover"
+        onConfirm={handleDeleteUsuario}
+        variant="destructive"
+      />
     </div>
   );
 }

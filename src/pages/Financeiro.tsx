@@ -1,7 +1,22 @@
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, CreditCard, Receipt, PieChart, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, CreditCard, Receipt, Plus, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell } from 'recharts';
 import { cn } from '@/lib/utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ContaForm, ContaFormData } from '@/components/forms/ContaForm';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { useToast } from '@/hooks/use-toast';
+
+interface Conta {
+  id: string;
+  descricao: string;
+  valor: number;
+  vencimento: string;
+  status: 'pendente' | 'vencido' | 'pago';
+  tipo: 'receber' | 'pagar';
+  categoria?: string;
+  dataPagamento?: string;
+}
 
 const fluxoCaixaData = [
   { name: 'Jan', receitas: 45000, despesas: 32000 },
@@ -20,20 +35,65 @@ const despesasPorCategoria = [
   { name: 'Outros', value: 5000, color: 'hsl(var(--chart-5))' },
 ];
 
-const contasReceber = [
-  { id: '1', cliente: 'João Silva', valor: 1500, vencimento: '2024-01-25', status: 'pendente' },
-  { id: '2', cliente: 'Maria Santos', valor: 2800, vencimento: '2024-01-22', status: 'vencido' },
-  { id: '3', cliente: 'Pedro Costa', valor: 950, vencimento: '2024-01-28', status: 'pendente' },
-];
-
-const contasPagar = [
-  { id: '1', fornecedor: 'Fornecedor ABC', valor: 5500, vencimento: '2024-01-23', status: 'pendente' },
-  { id: '2', fornecedor: 'Distribuidora XYZ', valor: 3200, vencimento: '2024-01-22', status: 'vencido' },
-  { id: '3', fornecedor: 'Energia Elétrica', valor: 1800, vencimento: '2024-01-30', status: 'pendente' },
+const contasDemo: Conta[] = [
+  { id: '1', descricao: 'João Silva', valor: 1500, vencimento: '2024-01-25', status: 'pendente', tipo: 'receber' },
+  { id: '2', descricao: 'Maria Santos', valor: 2800, vencimento: '2024-01-22', status: 'vencido', tipo: 'receber' },
+  { id: '3', descricao: 'Pedro Costa', valor: 950, vencimento: '2024-01-28', status: 'pendente', tipo: 'receber' },
+  { id: '4', descricao: 'Fornecedor ABC', valor: 5500, vencimento: '2024-01-23', status: 'pendente', tipo: 'pagar' },
+  { id: '5', descricao: 'Distribuidora XYZ', valor: 3200, vencimento: '2024-01-22', status: 'vencido', tipo: 'pagar' },
+  { id: '6', descricao: 'Energia Elétrica', valor: 1800, vencimento: '2024-01-30', status: 'pendente', tipo: 'pagar' },
 ];
 
 export default function Financeiro() {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'visao-geral' | 'receber' | 'pagar' | 'dre'>('visao-geral');
+  const [contas, setContas] = useState<Conta[]>(contasDemo);
+  const [novaContaOpen, setNovaContaOpen] = useState(false);
+  const [novaContaTipo, setNovaContaTipo] = useState<'receber' | 'pagar'>('receber');
+  const [confirmAction, setConfirmAction] = useState<{ tipo: 'receber' | 'pagar'; conta: Conta } | null>(null);
+
+  const contasReceber = contas.filter(c => c.tipo === 'receber' && c.status !== 'pago');
+  const contasPagar = contas.filter(c => c.tipo === 'pagar' && c.status !== 'pago');
+
+  const handleAddConta = (data: ContaFormData) => {
+    const novaConta: Conta = {
+      id: crypto.randomUUID(),
+      descricao: data.descricao,
+      valor: data.valor,
+      vencimento: data.dataVencimento,
+      status: 'pendente',
+      tipo: novaContaTipo,
+      categoria: data.categoria,
+    };
+    setContas([...contas, novaConta]);
+    setNovaContaOpen(false);
+    toast({ 
+      title: novaContaTipo === 'receber' ? 'Conta a receber criada' : 'Conta a pagar criada',
+      description: `${data.descricao} - R$ ${data.valor.toFixed(2).replace('.', ',')}` 
+    });
+  };
+
+  const handleConfirmPayment = () => {
+    if (!confirmAction) return;
+    
+    setContas(contas.map(c => 
+      c.id === confirmAction.conta.id 
+        ? { ...c, status: 'pago' as const, dataPagamento: new Date().toISOString() }
+        : c
+    ));
+    
+    toast({ 
+      title: confirmAction.tipo === 'receber' ? 'Pagamento recebido' : 'Pagamento efetuado',
+      description: `${confirmAction.conta.descricao} - R$ ${confirmAction.conta.valor.toFixed(2).replace('.', ',')}` 
+    });
+    
+    setConfirmAction(null);
+  };
+
+  const openNovaContaDialog = (tipo: 'receber' | 'pagar') => {
+    setNovaContaTipo(tipo);
+    setNovaContaOpen(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -108,8 +168,10 @@ export default function Financeiro() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">A Receber</p>
-                  <p className="text-2xl font-bold text-primary">R$ 12.850</p>
-                  <p className="text-sm text-muted-foreground mt-1">15 títulos</p>
+                  <p className="text-2xl font-bold text-primary">
+                    R$ {contasReceber.reduce((t, c) => t + c.valor, 0).toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">{contasReceber.length} títulos</p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
                   <Receipt className="w-6 h-6 text-primary" />
@@ -121,8 +183,10 @@ export default function Financeiro() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">A Pagar</p>
-                  <p className="text-2xl font-bold text-warning">R$ 8.340</p>
-                  <p className="text-sm text-muted-foreground mt-1">8 títulos</p>
+                  <p className="text-2xl font-bold text-warning">
+                    R$ {contasPagar.reduce((t, c) => t + c.valor, 0).toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">{contasPagar.length} títulos</p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
                   <CreditCard className="w-6 h-6 text-warning" />
@@ -201,7 +265,13 @@ export default function Financeiro() {
 
       {activeTab === 'receber' && (
         <div className="stat-card">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Contas a Receber</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-foreground">Contas a Receber</h2>
+            <button className="btn-primary" onClick={() => openNovaContaDialog('receber')}>
+              <Plus className="w-4 h-4 mr-2" />
+              Nova Conta
+            </button>
+          </div>
           <table className="data-table">
             <thead>
               <tr>
@@ -215,7 +285,7 @@ export default function Financeiro() {
             <tbody>
               {contasReceber.map((conta) => (
                 <tr key={conta.id}>
-                  <td className="font-medium">{conta.cliente}</td>
+                  <td className="font-medium">{conta.descricao}</td>
                   <td className="text-right">R$ {conta.valor.toFixed(2).replace('.', ',')}</td>
                   <td>{new Date(conta.vencimento).toLocaleDateString('pt-BR')}</td>
                   <td className="text-center">
@@ -224,7 +294,12 @@ export default function Financeiro() {
                     </span>
                   </td>
                   <td>
-                    <button className="btn-success text-sm py-1 px-3">Receber</button>
+                    <button 
+                      className="btn-success text-sm py-1 px-3"
+                      onClick={() => setConfirmAction({ tipo: 'receber', conta })}
+                    >
+                      Receber
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -235,7 +310,13 @@ export default function Financeiro() {
 
       {activeTab === 'pagar' && (
         <div className="stat-card">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Contas a Pagar</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-foreground">Contas a Pagar</h2>
+            <button className="btn-primary" onClick={() => openNovaContaDialog('pagar')}>
+              <Plus className="w-4 h-4 mr-2" />
+              Nova Conta
+            </button>
+          </div>
           <table className="data-table">
             <thead>
               <tr>
@@ -249,7 +330,7 @@ export default function Financeiro() {
             <tbody>
               {contasPagar.map((conta) => (
                 <tr key={conta.id}>
-                  <td className="font-medium">{conta.fornecedor}</td>
+                  <td className="font-medium">{conta.descricao}</td>
                   <td className="text-right">R$ {conta.valor.toFixed(2).replace('.', ',')}</td>
                   <td>{new Date(conta.vencimento).toLocaleDateString('pt-BR')}</td>
                   <td className="text-center">
@@ -258,7 +339,12 @@ export default function Financeiro() {
                     </span>
                   </td>
                   <td>
-                    <button className="btn-primary text-sm py-1 px-3">Pagar</button>
+                    <button 
+                      className="btn-primary text-sm py-1 px-3"
+                      onClick={() => setConfirmAction({ tipo: 'pagar', conta })}
+                    >
+                      Pagar
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -302,6 +388,36 @@ export default function Financeiro() {
           </div>
         </div>
       )}
+
+      {/* Dialog Nova Conta */}
+      <Dialog open={novaContaOpen} onOpenChange={setNovaContaOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {novaContaTipo === 'receber' ? 'Nova Conta a Receber' : 'Nova Conta a Pagar'}
+            </DialogTitle>
+          </DialogHeader>
+          <ContaForm 
+            tipo={novaContaTipo}
+            onSubmit={handleAddConta} 
+            onCancel={() => setNovaContaOpen(false)} 
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Payment Dialog */}
+      <ConfirmDialog
+        open={!!confirmAction}
+        onOpenChange={(open) => !open && setConfirmAction(null)}
+        title={confirmAction?.tipo === 'receber' ? 'Confirmar Recebimento' : 'Confirmar Pagamento'}
+        description={
+          confirmAction?.tipo === 'receber' 
+            ? `Confirma o recebimento de R$ ${confirmAction?.conta.valor.toFixed(2).replace('.', ',')} de ${confirmAction?.conta.descricao}?`
+            : `Confirma o pagamento de R$ ${confirmAction?.conta.valor.toFixed(2).replace('.', ',')} para ${confirmAction?.conta.descricao}?`
+        }
+        confirmText={confirmAction?.tipo === 'receber' ? 'Receber' : 'Pagar'}
+        onConfirm={handleConfirmPayment}
+      />
     </div>
   );
 }
