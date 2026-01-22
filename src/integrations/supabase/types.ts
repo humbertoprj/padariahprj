@@ -76,6 +76,111 @@ export type Database = {
           },
         ]
       }
+      comanda_itens: {
+        Row: {
+          comanda_id: string
+          created_at: string | null
+          desconto: number | null
+          id: string
+          observacao: string | null
+          preco_unitario: number
+          produto_id: string
+          quantidade: number
+          subtotal: number
+        }
+        Insert: {
+          comanda_id: string
+          created_at?: string | null
+          desconto?: number | null
+          id?: string
+          observacao?: string | null
+          preco_unitario: number
+          produto_id: string
+          quantidade: number
+          subtotal: number
+        }
+        Update: {
+          comanda_id?: string
+          created_at?: string | null
+          desconto?: number | null
+          id?: string
+          observacao?: string | null
+          preco_unitario?: number
+          produto_id?: string
+          quantidade?: number
+          subtotal?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comanda_itens_comanda_id_fkey"
+            columns: ["comanda_id"]
+            isOneToOne: false
+            referencedRelation: "comandas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comanda_itens_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produtos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comandas: {
+        Row: {
+          cliente_id: string | null
+          cliente_nome: string | null
+          closed_at: string | null
+          created_at: string | null
+          empresa_id: string
+          id: string
+          numero: number
+          status: string | null
+          updated_at: string | null
+          valor_total: number | null
+        }
+        Insert: {
+          cliente_id?: string | null
+          cliente_nome?: string | null
+          closed_at?: string | null
+          created_at?: string | null
+          empresa_id: string
+          id?: string
+          numero: number
+          status?: string | null
+          updated_at?: string | null
+          valor_total?: number | null
+        }
+        Update: {
+          cliente_id?: string | null
+          cliente_nome?: string | null
+          closed_at?: string | null
+          created_at?: string | null
+          empresa_id?: string
+          id?: string
+          numero?: number
+          status?: string | null
+          updated_at?: string | null
+          valor_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comandas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comandas_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contas: {
         Row: {
           categoria: string | null
