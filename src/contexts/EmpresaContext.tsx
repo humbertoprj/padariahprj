@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api, API_ENDPOINTS } from '@/services/api';
+import { getLocalData, setLocalData } from '@/services/indexedDB';
 
 interface Empresa {
   id: string;
@@ -39,8 +40,8 @@ interface EmpresaContextType {
 
 const defaultEmpresa: Empresa = {
   id: '1',
-  nome: 'Minha Empresa',
-  razaoSocial: 'Minha Empresa LTDA',
+  nome: 'PDV Local',
+  razaoSocial: 'PDV Local LTDA',
   cnpj: '00.000.000/0001-00',
   telefone: '(11) 0000-0000',
   whatsapp: '(11) 90000-0000',
@@ -65,11 +66,25 @@ const defaultConfigFinanceira: ConfigFinanceira = {
 const EmpresaContext = createContext<EmpresaContextType | undefined>(undefined);
 
 export function EmpresaProvider({ children }: { children: ReactNode }) {
-  const [empresa, setEmpresa] = useState<Empresa>(defaultEmpresa);
+  const [empresa, setEmpresaState] = useState<Empresa>(defaultEmpresa);
   const [configFinanceira, setConfigFinanceira] = useState<ConfigFinanceira>(defaultConfigFinanceira);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'testing' | 'connected' | 'error'>('testing');
+
+  const setEmpresa = (newEmpresa: Empresa) => {
+    setEmpresaState(newEmpresa);
+    // Persistir localmente
+    setLocalData('empresa', newEmpresa);
+    // Atualizar config financeira
+    setConfigFinanceira({
+      taxaDebito: newEmpresa.taxaDebito,
+      taxaCreditoVista: newEmpresa.taxaCreditoVista,
+      taxaCreditoParcelado: newEmpresa.taxaCreditoParcelado,
+      taxaPix: newEmpresa.taxaPix,
+      taxaVoucher: newEmpresa.taxaVoucher,
+    });
+  };
 
   const testConnection = async (): Promise<boolean> => {
     try {
@@ -77,21 +92,24 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
       setError(null);
       setConnectionStatus('testing');
       
-      // Testar conexão com query simples
-      const { error: queryError } = await supabase
-        .from('empresas')
-        .select('id')
-        .limit(1);
+      // Testar conexão com API local
+      const health = await api.checkHealth();
       
-      if (queryError) {
-        console.error('❌ Erro na conexão:', queryError.message);
-        setError(`Erro na conexão: ${queryError.message}`);
+      if (!health.ok) {
+        console.log('⚠️ API local indisponível, usando dados locais');
         setConnectionStatus('error');
         return false;
       }
       
-      console.log('✅ Conexão com Lovable Cloud OK!');
+      console.log('✅ Conexão com API local OK! Latência:', health.latency, 'ms');
       setConnectionStatus('connected');
+      
+      // Tentar buscar dados da empresa
+      const response = await api.get<Empresa>(API_ENDPOINTS.empresa);
+      if (response.data) {
+        setEmpresa(response.data);
+      }
+      
       return true;
     } catch (err) {
       console.error('❌ Erro inesperado:', err);
@@ -103,9 +121,27 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Testar conexão ao montar
+  // Carregar dados locais e testar conexão ao montar
   useEffect(() => {
-    testConnection();
+    const init = async () => {
+      // Primeiro, carregar dados locais
+      const localEmpresa = await getLocalData<Empresa>('empresa');
+      if (localEmpresa) {
+        setEmpresaState(localEmpresa);
+        setConfigFinanceira({
+          taxaDebito: localEmpresa.taxaDebito,
+          taxaCreditoVista: localEmpresa.taxaCreditoVista,
+          taxaCreditoParcelado: localEmpresa.taxaCreditoParcelado,
+          taxaPix: localEmpresa.taxaPix,
+          taxaVoucher: localEmpresa.taxaVoucher,
+        });
+      }
+      
+      // Depois, testar conexão (atualiza dados se disponível)
+      testConnection();
+    };
+    
+    init();
   }, []);
 
   return (
