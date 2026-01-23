@@ -11,8 +11,8 @@ export interface ApiConfig {
 }
 
 const defaultConfig: ApiConfig = {
-  baseUrl: 'http://localhost:3333',
-  fallbackUrl: '',
+  baseUrl: 'http://192.168.3.107:3333',
+  fallbackUrl: 'http://localhost:3333', // Fallback para desenvolvimento local
   timeout: 10000, // 10 segundos
   retryAttempts: 3,
   retryDelay: 1000, // 1 segundo
