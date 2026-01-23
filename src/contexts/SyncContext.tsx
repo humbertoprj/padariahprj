@@ -20,7 +20,15 @@ interface SyncProviderProps {
 
 export function SyncProvider({ children, autoSyncInterval = 30000 }: SyncProviderProps) {
   const syncState = useSyncQueue();
-  const { isApiAvailable } = useConnectionContext();
+  
+  // Usar try-catch para evitar crash se ConnectionContext não estiver disponível
+  let isApiAvailable = false;
+  try {
+    const connectionContext = useConnectionContext();
+    isApiAvailable = connectionContext.isApiAvailable;
+  } catch {
+    console.warn('SyncProvider: ConnectionContext não disponível');
+  }
   
   // Iniciar sincronização automática quando API estiver disponível
   useEffect(() => {

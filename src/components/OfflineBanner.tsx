@@ -1,6 +1,7 @@
 import { WifiOff, CloudOff, RefreshCw } from 'lucide-react';
 import { useConnectionContext } from '@/contexts/ConnectionContext';
 import { Button } from '@/components/ui/button';
+import { getBaseUrl } from '@/services/config';
 
 interface OfflineBannerProps {
   className?: string;
@@ -44,7 +45,7 @@ export function OfflineBanner({ className = '' }: OfflineBannerProps) {
             <>
               <span className="font-medium text-yellow-600">Servidor local indisponível</span>
               <span className="text-muted-foreground ml-2">
-                — Verifique se o servidor está rodando em localhost:3333
+                — Verifique se o servidor está rodando em {getBaseUrl()}
               </span>
             </>
           )}
