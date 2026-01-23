@@ -32,43 +32,6 @@ interface FichaTecnica {
   insumos: { insumoNome: string; quantidade: number; unidade: string; perdaPercentual: number }[];
 }
 
-const produtosFabricados = [
-  { id: '1', nome: 'Pão Francês' },
-  { id: '2', nome: 'Bolo de Chocolate' },
-  { id: '3', nome: 'Croissant' },
-  { id: '4', nome: 'Pão de Queijo' },
-];
-
-const fichasTecnicasDemo: FichaTecnica[] = [
-  { 
-    id: '1', 
-    produtoId: '1', 
-    produtoNome: 'Pão Francês',
-    insumos: [
-      { insumoNome: 'Farinha de Trigo', quantidade: 1, unidade: 'KG', perdaPercentual: 2 },
-      { insumoNome: 'Fermento', quantidade: 30, unidade: 'G', perdaPercentual: 0 },
-      { insumoNome: 'Sal', quantidade: 20, unidade: 'G', perdaPercentual: 0 },
-    ]
-  },
-  { 
-    id: '2', 
-    produtoId: '2', 
-    produtoNome: 'Bolo de Chocolate',
-    insumos: [
-      { insumoNome: 'Farinha de Trigo', quantidade: 500, unidade: 'G', perdaPercentual: 1 },
-      { insumoNome: 'Chocolate em Pó', quantidade: 200, unidade: 'G', perdaPercentual: 0 },
-      { insumoNome: 'Ovos', quantidade: 4, unidade: 'UN', perdaPercentual: 5 },
-      { insumoNome: 'Açúcar', quantidade: 300, unidade: 'G', perdaPercentual: 0 },
-    ]
-  },
-];
-
-const ordensDemo: OrdemProducao[] = [
-  { id: '1', numero: 'OP-001', produto: 'Pão Francês', produtoId: '1', quantidade: 50, quantidadeProduzida: 25, unidade: 'KG', status: 'em_andamento', dataInicio: '2024-01-22 06:00', dataPrevisao: '2024-01-22 10:00', responsavel: 'João Silva', etapaAtual: 2, totalEtapas: 4 },
-  { id: '2', numero: 'OP-002', produto: 'Bolo de Chocolate', produtoId: '2', quantidade: 10, quantidadeProduzida: 0, unidade: 'UN', status: 'pendente', dataInicio: '2024-01-22 08:00', dataPrevisao: '2024-01-22 14:00', responsavel: 'Maria Santos', etapaAtual: 0, totalEtapas: 5 },
-  { id: '3', numero: 'OP-003', produto: 'Croissant', produtoId: '3', quantidade: 30, quantidadeProduzida: 30, unidade: 'UN', status: 'concluida', dataInicio: '2024-01-21 05:00', dataPrevisao: '2024-01-21 09:00', dataConclusao: '2024-01-21 08:45', responsavel: 'Pedro Costa', etapaAtual: 3, totalEtapas: 3 },
-];
-
 const statusConfig = {
   pendente: { label: 'Pendente', color: 'badge-warning', icon: Clock },
   em_andamento: { label: 'Em Andamento', color: 'text-primary bg-primary/10 px-2.5 py-0.5 rounded-full text-xs font-medium', icon: Play },
@@ -78,8 +41,9 @@ const statusConfig = {
 
 export default function Producao() {
   const { toast } = useToast();
-  const [ordens, setOrdens] = useState<OrdemProducao[]>(ordensDemo);
-  const [fichasTecnicas] = useState<FichaTecnica[]>(fichasTecnicasDemo);
+  const [ordens, setOrdens] = useState<OrdemProducao[]>([]);
+  const [fichasTecnicas] = useState<FichaTecnica[]>([]);
+  const [produtosFabricados] = useState<{ id: string; nome: string }[]>([]);
   const [view, setView] = useState<'ordens' | 'fichas'>('ordens');
   const [novaOrdemOpen, setNovaOrdemOpen] = useState(false);
   const [ordemDetalhes, setOrdemDetalhes] = useState<OrdemProducao | null>(null);

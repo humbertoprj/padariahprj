@@ -16,13 +16,6 @@ interface Usuario {
   ultimoAcesso: string;
 }
 
-const usuariosDemo: Usuario[] = [
-  { id: '1', nome: 'Administrador', email: 'admin@empresa.com', perfil: 'admin', ativo: true, ultimoAcesso: '2024-01-22 10:30' },
-  { id: '2', nome: 'João Caixa', email: 'joao@empresa.com', perfil: 'caixa', ativo: true, ultimoAcesso: '2024-01-22 08:00' },
-  { id: '3', nome: 'Maria Vendedora', email: 'maria@empresa.com', perfil: 'vendedor', ativo: true, ultimoAcesso: '2024-01-21 18:00' },
-  { id: '4', nome: 'Pedro Estoque', email: 'pedro@empresa.com', perfil: 'estoquista', ativo: false, ultimoAcesso: '2024-01-15 14:00' },
-];
-
 const perfis = {
   admin: { label: 'Administrador', color: 'bg-primary text-primary-foreground' },
   caixa: { label: 'Caixa', color: 'bg-success text-success-foreground' },
@@ -47,7 +40,7 @@ const permissoes = [
 export default function Usuarios() {
   const { toast } = useToast();
   const [busca, setBusca] = useState('');
-  const [usuarios, setUsuarios] = useState<Usuario[]>(usuariosDemo);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [showPermissoes, setShowPermissoes] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);

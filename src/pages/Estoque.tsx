@@ -21,18 +21,10 @@ interface Produto {
   ativo: boolean;
 }
 
-const produtosDemo: Produto[] = [
-  { id: '1', nome: 'Coca-Cola 2L', codigoBarras: '7894900011517', categoria: 'Bebidas', unidade: 'UN', custo: 8.50, preco: 12.99, margem: 52.82, estoqueAtual: 50, estoqueMinimo: 20, fabricado: false, ativo: true },
-  { id: '2', nome: 'Pão Francês', codigoBarras: '0000001', categoria: 'Padaria', unidade: 'KG', custo: 8.00, preco: 15.00, margem: 87.50, estoqueAtual: 100, estoqueMinimo: 30, fabricado: true, ativo: true },
-  { id: '3', nome: 'Arroz 5kg', codigoBarras: '7896006754018', categoria: 'Mercearia', unidade: 'UN', custo: 22.00, preco: 28.90, margem: 31.36, estoqueAtual: 5, estoqueMinimo: 15, fabricado: false, ativo: true },
-  { id: '4', nome: 'Feijão 1kg', codigoBarras: '7896006751239', categoria: 'Mercearia', unidade: 'UN', custo: 6.00, preco: 8.50, margem: 41.67, estoqueAtual: 45, estoqueMinimo: 20, fabricado: false, ativo: true },
-  { id: '5', nome: 'Leite Integral 1L', codigoBarras: '7891025100102', categoria: 'Laticínios', unidade: 'UN', custo: 4.20, preco: 5.99, margem: 42.62, estoqueAtual: 8, estoqueMinimo: 30, fabricado: false, ativo: true },
-];
-
 export default function Estoque() {
   const { toast } = useToast();
   const [busca, setBusca] = useState('');
-  const [produtos, setProdutos] = useState<Produto[]>(produtosDemo);
+  const [produtos, setProdutos] = useState<Produto[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);

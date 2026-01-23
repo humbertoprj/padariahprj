@@ -20,17 +20,10 @@ interface Cliente {
   ultimaCompra: string;
 }
 
-const clientesDemo: Cliente[] = [
-  { id: '1', nome: 'João Silva', cpfCnpj: '123.456.789-00', telefone: '(11) 99999-0001', email: 'joao@email.com', limiteCredito: 1000, saldoFiado: 250, cashback: 45.50, pontos: 1250, totalCompras: 5680, ultimaCompra: '2024-01-22' },
-  { id: '2', nome: 'Maria Santos', cpfCnpj: '987.654.321-00', telefone: '(11) 99999-0002', email: 'maria@email.com', limiteCredito: 2000, saldoFiado: 0, cashback: 120.00, pontos: 3500, totalCompras: 12450, ultimaCompra: '2024-01-21' },
-  { id: '3', nome: 'Pedro Costa', cpfCnpj: '456.789.123-00', telefone: '(11) 99999-0003', email: 'pedro@email.com', limiteCredito: 500, saldoFiado: 480, cashback: 0, pontos: 280, totalCompras: 1890, ultimaCompra: '2024-01-20' },
-  { id: '4', nome: 'Ana Oliveira', cpfCnpj: '789.123.456-00', telefone: '(11) 99999-0004', email: 'ana@email.com', limiteCredito: 1500, saldoFiado: 0, cashback: 78.90, pontos: 2100, totalCompras: 8920, ultimaCompra: '2024-01-22' },
-];
-
 export default function Clientes() {
   const { toast } = useToast();
   const [busca, setBusca] = useState('');
-  const [clientes, setClientes] = useState<Cliente[]>(clientesDemo);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
 

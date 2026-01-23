@@ -18,36 +18,12 @@ interface Conta {
   dataPagamento?: string;
 }
 
-const fluxoCaixaData = [
-  { name: 'Jan', receitas: 45000, despesas: 32000 },
-  { name: 'Fev', receitas: 52000, despesas: 38000 },
-  { name: 'Mar', receitas: 48000, despesas: 35000 },
-  { name: 'Abr', receitas: 61000, despesas: 42000 },
-  { name: 'Mai', receitas: 55000, despesas: 39000 },
-  { name: 'Jun', receitas: 67000, despesas: 45000 },
-];
-
-const despesasPorCategoria = [
-  { name: 'Fornecedores', value: 35000, color: 'hsl(var(--primary))' },
-  { name: 'Salários', value: 25000, color: 'hsl(var(--success))' },
-  { name: 'Impostos', value: 12000, color: 'hsl(var(--warning))' },
-  { name: 'Operacional', value: 8000, color: 'hsl(var(--chart-4))' },
-  { name: 'Outros', value: 5000, color: 'hsl(var(--chart-5))' },
-];
-
-const contasDemo: Conta[] = [
-  { id: '1', descricao: 'João Silva', valor: 1500, vencimento: '2024-01-25', status: 'pendente', tipo: 'receber' },
-  { id: '2', descricao: 'Maria Santos', valor: 2800, vencimento: '2024-01-22', status: 'vencido', tipo: 'receber' },
-  { id: '3', descricao: 'Pedro Costa', valor: 950, vencimento: '2024-01-28', status: 'pendente', tipo: 'receber' },
-  { id: '4', descricao: 'Fornecedor ABC', valor: 5500, vencimento: '2024-01-23', status: 'pendente', tipo: 'pagar' },
-  { id: '5', descricao: 'Distribuidora XYZ', valor: 3200, vencimento: '2024-01-22', status: 'vencido', tipo: 'pagar' },
-  { id: '6', descricao: 'Energia Elétrica', valor: 1800, vencimento: '2024-01-30', status: 'pendente', tipo: 'pagar' },
-];
-
 export default function Financeiro() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'visao-geral' | 'receber' | 'pagar' | 'dre'>('visao-geral');
-  const [contas, setContas] = useState<Conta[]>(contasDemo);
+  const [contas, setContas] = useState<Conta[]>([]);
+  const [fluxoCaixaData] = useState<{ name: string; receitas: number; despesas: number }[]>([]);
+  const [despesasPorCategoria] = useState<{ name: string; value: number; color: string }[]>([]);
   const [novaContaOpen, setNovaContaOpen] = useState(false);
   const [novaContaTipo, setNovaContaTipo] = useState<'receber' | 'pagar'>('receber');
   const [confirmAction, setConfirmAction] = useState<{ tipo: 'receber' | 'pagar'; conta: Conta } | null>(null);
@@ -136,11 +112,8 @@ export default function Financeiro() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Receitas (Mês)</p>
-                  <p className="text-2xl font-bold text-success">R$ 67.450</p>
-                  <div className="flex items-center gap-1 mt-1 text-success text-sm">
-                    <ArrowUpRight className="w-4 h-4" />
-                    <span>+12% vs mês anterior</span>
-                  </div>
+                  <p className="text-2xl font-bold text-success">R$ 0,00</p>
+                  <p className="text-sm text-muted-foreground mt-1">Sem dados</p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
                   <TrendingUp className="w-6 h-6 text-success" />
@@ -152,11 +125,8 @@ export default function Financeiro() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Despesas (Mês)</p>
-                  <p className="text-2xl font-bold text-destructive">R$ 45.200</p>
-                  <div className="flex items-center gap-1 mt-1 text-destructive text-sm">
-                    <ArrowDownRight className="w-4 h-4" />
-                    <span>+5% vs mês anterior</span>
-                  </div>
+                  <p className="text-2xl font-bold text-destructive">R$ 0,00</p>
+                  <p className="text-sm text-muted-foreground mt-1">Sem dados</p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
                   <TrendingDown className="w-6 h-6 text-destructive" />
@@ -359,33 +329,34 @@ export default function Financeiro() {
           <div className="space-y-3">
             <div className="flex justify-between py-2 border-b border-border">
               <span className="font-medium">Receita Bruta</span>
-              <span className="font-bold text-foreground">R$ 67.450,00</span>
+              <span className="font-bold text-foreground">R$ 0,00</span>
             </div>
             <div className="flex justify-between py-2 border-b border-border text-muted-foreground">
               <span className="pl-4">(-) Taxas de Cartão</span>
-              <span>R$ 1.685,00</span>
+              <span>R$ 0,00</span>
             </div>
             <div className="flex justify-between py-2 border-b border-border">
               <span className="font-medium">(=) Receita Líquida</span>
-              <span className="font-bold text-success">R$ 65.765,00</span>
+              <span className="font-bold text-success">R$ 0,00</span>
             </div>
             <div className="flex justify-between py-2 border-b border-border text-muted-foreground">
               <span className="pl-4">(-) Custo dos Produtos</span>
-              <span>R$ 28.500,00</span>
+              <span>R$ 0,00</span>
             </div>
             <div className="flex justify-between py-2 border-b border-border">
               <span className="font-medium">(=) Lucro Bruto</span>
-              <span className="font-bold text-success">R$ 37.265,00</span>
+              <span className="font-bold text-success">R$ 0,00</span>
             </div>
             <div className="flex justify-between py-2 border-b border-border text-muted-foreground">
               <span className="pl-4">(-) Despesas Operacionais</span>
-              <span>R$ 16.700,00</span>
+              <span>R$ 0,00</span>
             </div>
-            <div className="flex justify-between py-2 bg-success/10 rounded-lg px-3">
-              <span className="font-bold text-success">(=) Lucro Líquido</span>
-              <span className="font-bold text-success text-xl">R$ 20.565,00</span>
+            <div className="flex justify-between py-2 bg-muted/50 rounded-lg px-3">
+              <span className="font-bold text-muted-foreground">(=) Lucro Líquido</span>
+              <span className="font-bold text-muted-foreground text-xl">R$ 0,00</span>
             </div>
           </div>
+          <p className="text-sm text-muted-foreground text-center mt-6">Conecte ao servidor para ver dados reais</p>
         </div>
       )}
 
