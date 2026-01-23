@@ -83,18 +83,7 @@ class ApiClient {
     const cacheKey = `api:${method}:${endpoint}`;
     
     // Para GET, verificar cache primeiro
-    if (method === 'GET' && cache) {
-      const cached = await getCachedData<T>(cacheKey);
-      if (cached !== undefined) {
-        // Tentar atualizar em background
-        this.backgroundRefresh<T>(endpoint, cacheKey, cacheTTL, timeout);
-        return {
-          data: cached,
-          error: null,
-          status: 200,
-          fromCache: true,
-        };
-      }
+   
     }
     
     const requestOptions: RequestInit = {
@@ -111,29 +100,6 @@ class ApiClient {
     
     try {
       const response = await this.tryRequest(endpoint, requestOptions, timeout);
-      
-      // Tratar 404 como fallback para cache
-      if (response.status === 404) {
-        console.log(`📂 Endpoint ${endpoint} retornou 404, buscando cache...`);
-        if (method === 'GET') {
-          const cached = await getCachedData<T>(cacheKey);
-          if (cached !== undefined) {
-            return {
-              data: cached,
-              error: null,
-              status: 200,
-              fromCache: true,
-            };
-          }
-        }
-        // Se não há cache, retornar array vazio para listas
-        return {
-          data: ([] as unknown) as T,
-          error: null,
-          status: 200,
-          fromCache: false,
-        };
-      }
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -159,11 +125,7 @@ class ApiClient {
         fromCache: false,
       };
     } catch (e) {
-      // Se falhou e é GET, tentar retornar do cache
-      if (method === 'GET') {
-        const cached = await getCachedData<T>(cacheKey);
-        if (cached !== undefined) {
-          return {
+      return {
             data: cached,
             error: null,
             status: 200,
