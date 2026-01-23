@@ -112,6 +112,29 @@ class ApiClient {
     try {
       const response = await this.tryRequest(endpoint, requestOptions, timeout);
       
+      // Tratar 404 como fallback para cache
+      if (response.status === 404) {
+        console.log(`📂 Endpoint ${endpoint} retornou 404, buscando cache...`);
+        if (method === 'GET') {
+          const cached = await getCachedData<T>(cacheKey);
+          if (cached !== undefined) {
+            return {
+              data: cached,
+              error: null,
+              status: 200,
+              fromCache: true,
+            };
+          }
+        }
+        // Se não há cache, retornar array vazio para listas
+        return {
+          data: ([] as unknown) as T,
+          error: null,
+          status: 200,
+          fromCache: false,
+        };
+      }
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         return {

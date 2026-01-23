@@ -104,10 +104,26 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
       console.log('✅ Conexão com API local OK! Latência:', health.latency, 'ms');
       setConnectionStatus('connected');
       
-      // Tentar buscar dados da empresa
+      // Tentar buscar dados da empresa (404 é tratado graciosamente)
       const response = await api.get<Empresa>(API_ENDPOINTS.empresa);
-      if (response.data) {
+      if (response.data && !Array.isArray(response.data)) {
         setEmpresa(response.data);
+      }
+      
+      // Disparar sincronização inicial automaticamente
+      try {
+        console.log('🔄 Disparando sincronização inicial...');
+        const syncResponse = await api.post<{ success: boolean }>(API_ENDPOINTS.sync, {
+          action: 'pull',
+          timestamp: new Date().toISOString(),
+        });
+        if (syncResponse.data?.success) {
+          console.log('✅ Sincronização inicial concluída');
+        } else if (syncResponse.error) {
+          console.log('⚠️ Sync inicial falhou (endpoint pode não existir):', syncResponse.error);
+        }
+      } catch (syncErr) {
+        console.log('⚠️ Sincronização inicial não disponível:', syncErr);
       }
       
       return true;
