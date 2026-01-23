@@ -19,71 +19,8 @@ const relatoriosDisponiveis = [
   { id: 'clientes', label: 'Clientes', icon: Users, descricao: 'Análise de clientes e vendas' },
 ];
 
-// Dados demo para relatórios
-const dadosRelatorios: Record<string, RelatorioData> = {
-  vendas: {
-    tipo: 'vendas',
-    dados: [
-      { data: '22/01/2024', cliente: 'João Silva', produtos: 5, valor: 156.80, formaPagamento: 'Cartão Débito' },
-      { data: '22/01/2024', cliente: 'Maria Santos', produtos: 3, valor: 89.50, formaPagamento: 'PIX' },
-      { data: '21/01/2024', cliente: 'Pedro Costa', produtos: 8, valor: 234.00, formaPagamento: 'Dinheiro' },
-      { data: '21/01/2024', cliente: 'Ana Oliveira', produtos: 2, valor: 45.90, formaPagamento: 'Cartão Crédito' },
-      { data: '20/01/2024', cliente: 'Carlos Lima', produtos: 6, valor: 178.30, formaPagamento: 'PIX' },
-    ],
-    totais: { totalVendas: 5, totalValor: 704.50, ticketMedio: 140.90 }
-  },
-  estoque: {
-    tipo: 'estoque',
-    dados: [
-      { produto: 'Coca-Cola 2L', categoria: 'Bebidas', estoque: 50, minimo: 20, status: 'OK' },
-      { produto: 'Pão Francês', categoria: 'Padaria', estoque: 100, minimo: 30, status: 'OK' },
-      { produto: 'Arroz 5kg', categoria: 'Mercearia', estoque: 5, minimo: 15, status: 'Baixo' },
-      { produto: 'Leite 1L', categoria: 'Laticínios', estoque: 8, minimo: 30, status: 'Baixo' },
-      { produto: 'Feijão 1kg', categoria: 'Mercearia', estoque: 45, minimo: 20, status: 'OK' },
-    ],
-    totais: { totalProdutos: 5, produtosBaixoEstoque: 2, valorEstoque: 12450.00 }
-  },
-  financeiro: {
-    tipo: 'financeiro',
-    dados: [
-      { descricao: 'Receita Bruta', valor: 67450.00, tipo: 'receita' },
-      { descricao: 'Taxas de Cartão', valor: -1685.00, tipo: 'despesa' },
-      { descricao: 'Custo dos Produtos', valor: -28500.00, tipo: 'despesa' },
-      { descricao: 'Despesas Operacionais', valor: -16700.00, tipo: 'despesa' },
-      { descricao: 'Lucro Líquido', valor: 20565.00, tipo: 'lucro' },
-    ],
-    totais: { receitaBruta: 67450.00, despesasTotais: 46885.00, lucroLiquido: 20565.00 }
-  },
-  clientes: {
-    tipo: 'clientes',
-    dados: [
-      { cliente: 'João Silva', compras: 15, valorTotal: 5680.00, ultimaCompra: '22/01/2024' },
-      { cliente: 'Maria Santos', compras: 28, valorTotal: 12450.00, ultimaCompra: '21/01/2024' },
-      { cliente: 'Pedro Costa', compras: 8, valorTotal: 1890.00, ultimaCompra: '20/01/2024' },
-      { cliente: 'Ana Oliveira', compras: 22, valorTotal: 8920.00, ultimaCompra: '22/01/2024' },
-    ],
-    totais: { totalClientes: 4, totalCompras: 73, valorTotal: 28940.00 }
-  },
-  producao: {
-    tipo: 'producao',
-    dados: [
-      { ordem: 'OP-001', produto: 'Pão Francês', quantidade: 50, status: 'Em Andamento', custoEstimado: 400.00 },
-      { ordem: 'OP-002', produto: 'Bolo de Chocolate', quantidade: 10, status: 'Pendente', custoEstimado: 250.00 },
-      { ordem: 'OP-003', produto: 'Croissant', quantidade: 30, status: 'Concluída', custoEstimado: 180.00 },
-    ],
-    totais: { ordensTotais: 3, ordensConcluidas: 1, custoTotal: 830.00 }
-  },
-  caixa: {
-    tipo: 'caixa',
-    dados: [
-      { data: '22/01/2024', tipo: 'Entrada', descricao: 'Vendas do dia', valor: 2450.00 },
-      { data: '22/01/2024', tipo: 'Saída', descricao: 'Pagamento Fornecedor', valor: -850.00 },
-      { data: '21/01/2024', tipo: 'Entrada', descricao: 'Vendas do dia', valor: 1890.00 },
-      { data: '21/01/2024', tipo: 'Saída', descricao: 'Despesas Operacionais', valor: -320.00 },
-    ],
-    totais: { entradas: 4340.00, saidas: 1170.00, saldo: 3170.00 }
-  },
-};
+// Relatórios serão carregados da API
+const dadosRelatorios: Record<string, RelatorioData> = {};
 
 export default function Relatorios() {
   const { toast } = useToast();
