@@ -14,7 +14,7 @@ export interface RequestOptions {
   body?: unknown;
   headers?: Record<string, string>;
   cache?: boolean;
-  cacheTTL?: number; // em milissegundos
+  cacheTTL?: number;
   timeout?: number;
 }
 
@@ -48,13 +48,11 @@ class ApiClient {
     const fallbackUrl = getFallbackUrl();
     
     try {
-      // Tentar URL primária
       const response = await this.fetchWithTimeout(primaryUrl, options, timeout);
       this.currentBaseUrl = getBaseUrl();
       this.isUsingFallback = false;
       return response;
     } catch (e) {
-      // Se houver URL de fallback, tentar
       if (fallbackUrl) {
         try {
           const response = await this.fetchWithTimeout(`${fallbackUrl}${endpoint}`, options, timeout);
@@ -76,14 +74,24 @@ class ApiClient {
       body,
       headers = {},
       cache = method === 'GET',
-      cacheTTL = 5 * 60 * 1000, // 5 minutos padrão
+      cacheTTL = 5 * 60 * 1000,
       timeout = config.timeout,
     } = options;
     
     const cacheKey = `api:${method}:${endpoint}`;
     
     // Para GET, verificar cache primeiro
-   
+    if (method === 'GET' && cache) {
+      const cached = await getCachedData<T>(cacheKey);
+      if (cached !== null) {
+        this.backgroundRefresh<T>(endpoint, cacheKey, cacheTTL, timeout);
+        return {
+          data: cached,
+          error: null,
+          status: 200,
+          fromCache: true,
+        };
+      }
     }
     
     const requestOptions: RequestInit = {
@@ -101,6 +109,34 @@ class ApiClient {
     try {
       const response = await this.tryRequest(endpoint, requestOptions, timeout);
       
+      // Tratamento especial para 404 - retornar dados do cache ou array vazio
+      if (response.status === 404) {
+        if (method === 'GET') {
+          const cached = await getCachedData<T>(cacheKey);
+          if (cached !== null) {
+            return {
+              data: cached,
+              error: null,
+              status: 200,
+              fromCache: true,
+            };
+          }
+          // Retornar array vazio como fallback
+          return {
+            data: [] as unknown as T,
+            error: null,
+            status: 200,
+            fromCache: false,
+          };
+        }
+        return {
+          data: null,
+          error: 'Recurso não encontrado',
+          status: 404,
+          fromCache: false,
+        };
+      }
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         return {
@@ -113,7 +149,6 @@ class ApiClient {
       
       const data = await response.json() as T;
       
-      // Salvar no cache para GETs
       if (method === 'GET' && cache) {
         await setCachedData(cacheKey, data, cacheTTL);
       }
@@ -125,7 +160,11 @@ class ApiClient {
         fromCache: false,
       };
     } catch (e) {
-      return {
+      // Em caso de erro de rede, tentar cache
+      if (method === 'GET') {
+        const cached = await getCachedData<T>(cacheKey);
+        if (cached !== null) {
+          return {
             data: cached,
             error: null,
             status: 200,
@@ -159,7 +198,6 @@ class ApiClient {
     }
   }
   
-  // Métodos de conveniência
   async get<T>(endpoint: string, options?: Omit<RequestOptions, 'method'>): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { ...options, method: 'GET' });
   }
@@ -180,7 +218,6 @@ class ApiClient {
     return this.request<T>(endpoint, { ...options, method: 'PATCH', body });
   }
   
-  // Health check
   async checkHealth(): Promise<{ ok: boolean; latency: number }> {
     const start = Date.now();
     try {
@@ -197,7 +234,6 @@ class ApiClient {
     }
   }
   
-  // Getters
   getCurrentBaseUrl(): string {
     return this.currentBaseUrl;
   }
@@ -207,8 +243,6 @@ class ApiClient {
   }
 }
 
-// Instância singleton
 export const api = new ApiClient();
 
-// Re-exportar endpoints para conveniência
 export { API_ENDPOINTS };
