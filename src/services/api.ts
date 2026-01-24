@@ -1,6 +1,6 @@
 // Cliente HTTP para API Local
 import { getApiConfig, getBaseUrl, getFallbackUrl, API_ENDPOINTS } from './config';
-import { getCachedData, setCachedData } from './indexedDB';
+import { setCachedData } from './indexedDB';
 
 export interface ApiResponse<T> {
   data: T | null;
@@ -60,10 +60,10 @@ class ApiClient {
           this.isUsingFallback = true;
           return response;
         } catch {
-          throw new Error('Servidor local indisponível');
+          throw new Error('Servidor Local Indisponível');
         }
       }
-      throw new Error('Servidor local indisponível');
+      throw new Error('Servidor Local Indisponível');
     }
   }
   
@@ -80,19 +80,8 @@ class ApiClient {
     
     const cacheKey = `api:${method}:${endpoint}`;
     
-    // Para GET, verificar cache primeiro
-    if (method === 'GET' && cache) {
-      const cached = await getCachedData<T>(cacheKey);
-      if (cached !== null) {
-        this.backgroundRefresh<T>(endpoint, cacheKey, cacheTTL, timeout);
-        return {
-          data: cached,
-          error: null,
-          status: 200,
-          fromCache: true,
-        };
-      }
-    }
+    // DESATIVADO: Não usar cache para fingir conexão
+    // O sistema SEMPRE deve consultar o servidor real primeiro
     
     const requestOptions: RequestInit = {
       method,
@@ -109,29 +98,11 @@ class ApiClient {
     try {
       const response = await this.tryRequest(endpoint, requestOptions, timeout);
       
-      // Tratamento especial para 404 - retornar dados do cache ou array vazio
+      // Tratamento para 404 - endpoint não existe
       if (response.status === 404) {
-        if (method === 'GET') {
-          const cached = await getCachedData<T>(cacheKey);
-          if (cached !== null) {
-            return {
-              data: cached,
-              error: null,
-              status: 200,
-              fromCache: true,
-            };
-          }
-          // Retornar array vazio como fallback
-          return {
-            data: [] as unknown as T,
-            error: null,
-            status: 200,
-            fromCache: false,
-          };
-        }
         return {
           data: null,
-          error: 'Recurso não encontrado',
+          error: 'Endpoint não encontrado',
           status: 404,
           fromCache: false,
         };
@@ -149,6 +120,7 @@ class ApiClient {
       
       const data = await response.json() as T;
       
+      // Salvar no cache apenas após sucesso real do servidor
       if (method === 'GET' && cache) {
         await setCachedData(cacheKey, data, cacheTTL);
       }
@@ -160,41 +132,14 @@ class ApiClient {
         fromCache: false,
       };
     } catch (e) {
-      // Em caso de erro de rede, tentar cache
-      if (method === 'GET') {
-        const cached = await getCachedData<T>(cacheKey);
-        if (cached !== null) {
-          return {
-            data: cached,
-            error: null,
-            status: 200,
-            fromCache: true,
-          };
-        }
-      }
-      
+      // FORÇAR ERRO: Não usar cache como fallback
+      // O usuário precisa saber que o servidor está indisponível
       return {
         data: null,
-        error: e instanceof Error ? e.message : 'Erro desconhecido',
+        error: e instanceof Error ? e.message : 'Servidor Local Indisponível',
         status: 0,
         fromCache: false,
       };
-    }
-  }
-  
-  private async backgroundRefresh<T>(endpoint: string, cacheKey: string, cacheTTL: number, timeout: number): Promise<void> {
-    try {
-      const response = await this.tryRequest(endpoint, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      }, timeout);
-      
-      if (response.ok) {
-        const data = await response.json() as T;
-        await setCachedData(cacheKey, data, cacheTTL);
-      }
-    } catch {
-      // Silenciosamente falhar no background refresh
     }
   }
   
