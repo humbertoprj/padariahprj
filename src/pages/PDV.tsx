@@ -228,22 +228,60 @@ export default function PDV() {
     setComandas(new Map(comandas.set(comandaSelecionada, { ...comandaAtual, clienteNome: nome })));
   };
 
-  // Finalizar venda
-  const finalizarVenda = () => {
-    if (!comandaSelecionada || !comandaAtual) return;
+  // Estado para salvar venda
+  const [salvandoVenda, setSalvandoVenda] = useState(false);
+
+  // Mensagem padrão de erro de conexão
+  const ERRO_SERVIDOR_OFFLINE = 'Erro: Servidor Local não encontrado. Certifique-se de que o CMD está aberto no computador principal.';
+
+  // Finalizar venda via API local
+  const finalizarVenda = async () => {
+    if (!comandaSelecionada || !comandaAtual || !formaPagamento) return;
     
-    // Fechar comanda
-    const comandaFechada = { ...comandaAtual, status: 'fechada' as const };
+    setSalvandoVenda(true);
+    
+    // Montar payload para API local
+    const payload = {
+      comanda_numero: comandaSelecionada,
+      cliente_nome: comandaAtual.clienteNome || null,
+      forma_pagamento: formaPagamento,
+      valor_bruto: subtotal,
+      desconto: descontoGeral,
+      valor_desconto: valorDesconto,
+      valor_liquido: valorLiquido,
+      taxa_operadora: taxa,
+      valor_taxa: valorTaxa,
+      valor_total: total,
+      itens: comandaAtual.itens.map(item => ({
+        produto_id: item.produto.id,
+        produto_nome: item.produto.nome,
+        quantidade: item.quantidade,
+        preco_unitario: item.produto.preco,
+        desconto: item.desconto,
+        subtotal: item.produto.preco * item.quantidade,
+      })),
+    };
+    
+    const response = await api.post<any>(API_ENDPOINTS.vendas, payload);
+    
+    if (response.error) {
+      alert(response.status === 0 ? ERRO_SERVIDOR_OFFLINE : `Erro ao finalizar venda: ${response.error}`);
+      setSalvandoVenda(false);
+      return;
+    }
+    
+    // Sucesso - limpar comanda
     const novasComandas = new Map(comandas);
     novasComandas.delete(comandaSelecionada);
     setComandas(novasComandas);
     
-    alert(`Comanda ${comandaSelecionada} finalizada!\nValor: R$ ${total.toFixed(2).replace('.', ',')}\nForma: ${formaPagamento}`);
+    alert(`✅ Venda finalizada com sucesso!\n\nComanda: ${comandaSelecionada}\nValor: R$ ${total.toFixed(2).replace('.', ',')}\nForma: ${formaPagamento}`);
     
     setComandaSelecionada(null);
     setView('comandas');
     setFormaPagamento(null);
     setDescontoGeral(0);
+    setSalvandoVenda(false);
   };
 
   // Cancelar comanda
@@ -675,16 +713,26 @@ export default function PDV() {
                         <button
                           onClick={() => setView('produtos')}
                           className="btn-secondary flex-1 py-3"
+                          disabled={salvandoVenda}
                         >
                           Voltar
                         </button>
                         <button
                           onClick={finalizarVenda}
-                          disabled={!formaPagamento}
+                          disabled={!formaPagamento || salvandoVenda}
                           className="btn-success flex-1 py-3 text-base md:text-lg"
                         >
-                          <Check className="w-5 h-5 mr-2" />
-                          Finalizar
+                          {salvandoVenda ? (
+                            <>
+                              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                              Salvando...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-5 h-5 mr-2" />
+                              Finalizar
+                            </>
+                          )}
                         </button>
                       </>
                     )}
