@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Barcode,
@@ -17,7 +17,11 @@ import {
   Check,
   Package,
   ShoppingCart,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
+import { api } from '@/services/api';
+import { API_ENDPOINTS } from '@/services/config';
 import { Link } from 'react-router-dom';
 import { useEmpresa } from '@/contexts/EmpresaContext';
 import { cn } from '@/lib/utils';
@@ -47,23 +51,6 @@ interface Comanda {
   createdAt: Date;
 }
 
-const produtosDemo: Produto[] = [
-  { id: '1', nome: 'Coca-Cola 2L', preco: 12.99, categoria: 'Bebidas', codigoBarras: '7894900011517', estoque: 50 },
-  { id: '2', nome: 'Pão Francês (kg)', preco: 15.00, categoria: 'Padaria', codigoBarras: '0000001', estoque: 100 },
-  { id: '3', nome: 'Arroz 5kg', preco: 28.90, categoria: 'Mercearia', codigoBarras: '7896006754018', estoque: 30 },
-  { id: '4', nome: 'Feijão 1kg', preco: 8.50, categoria: 'Mercearia', codigoBarras: '7896006751239', estoque: 45 },
-  { id: '5', nome: 'Leite Integral 1L', preco: 5.99, categoria: 'Laticínios', codigoBarras: '7891025100102', estoque: 80 },
-  { id: '6', nome: 'Café 500g', preco: 18.90, categoria: 'Mercearia', codigoBarras: '7891910000197', estoque: 25 },
-  { id: '7', nome: 'Açúcar 1kg', preco: 4.99, categoria: 'Mercearia', codigoBarras: '7896215100012', estoque: 60 },
-  { id: '8', nome: 'Óleo de Soja 900ml', preco: 7.49, categoria: 'Mercearia', codigoBarras: '7891107111019', estoque: 40 },
-  { id: '9', nome: 'Sabonete', preco: 2.99, categoria: 'Higiene', codigoBarras: '7891024130018', estoque: 100 },
-  { id: '10', nome: 'Papel Higiênico', preco: 19.90, categoria: 'Higiene', codigoBarras: '7896051131014', estoque: 35 },
-  { id: '11', nome: 'Detergente 500ml', preco: 3.49, categoria: 'Limpeza', codigoBarras: '7891024114025', estoque: 55 },
-  { id: '12', nome: 'Macarrão 500g', preco: 4.29, categoria: 'Mercearia', codigoBarras: '7896045103010', estoque: 70 },
-];
-
-const categorias = ['Todas', 'Bebidas', 'Padaria', 'Mercearia', 'Laticínios', 'Higiene', 'Limpeza'];
-
 const formasPagamento = [
   { id: 'dinheiro', label: 'Dinheiro', icon: Banknote },
   { id: 'debito', label: 'Débito', icon: CreditCard },
@@ -88,17 +75,62 @@ export default function PDV() {
   const [descontoGeral, setDescontoGeral] = useState(0);
   const [nomeCliente, setNomeCliente] = useState('');
   const [mobileTab, setMobileTab] = useState<'produtos' | 'comanda'>('produtos');
+  
+  // Estado para produtos do estoque
+  const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [loadingProdutos, setLoadingProdutos] = useState(true);
+  const [erroProdutos, setErroProdutos] = useState<string | null>(null);
+  const [categorias, setCategorias] = useState<string[]>(['Todas']);
+
+  // Carregar produtos do estoque via API
+  useEffect(() => {
+    const carregarProdutos = async () => {
+      setLoadingProdutos(true);
+      setErroProdutos(null);
+      
+      const response = await api.get<any[]>(API_ENDPOINTS.produtos);
+      
+      if (response.error) {
+        setErroProdutos(response.error);
+        setProdutos([]);
+      } else if (response.data) {
+        // Mapear dados da API para interface do PDV
+        const produtosMapeados: Produto[] = response.data
+          .filter((p: any) => p.ativo !== false) // Apenas produtos ativos
+          .map((p: any) => ({
+            id: p.id,
+            nome: p.nome,
+            preco: p.preco_venda || p.preco || 0,
+            categoria: p.categoria || 'Outros',
+            codigoBarras: p.codigo_barras || p.id,
+            estoque: p.estoque_atual || p.estoque || 0,
+          }));
+        
+        setProdutos(produtosMapeados);
+        
+        // Extrair categorias únicas
+        const categoriasUnicas = ['Todas', ...new Set(produtosMapeados.map(p => p.categoria))];
+        setCategorias(categoriasUnicas);
+      } else {
+        setProdutos([]);
+      }
+      
+      setLoadingProdutos(false);
+    };
+    
+    carregarProdutos();
+  }, []);
 
   // Filtrar produtos
   const produtosFiltrados = useMemo(() => {
-    return produtosDemo.filter((produto) => {
+    return produtos.filter((produto) => {
       const matchBusca =
         produto.nome.toLowerCase().includes(busca.toLowerCase()) ||
         produto.codigoBarras.includes(busca);
       const matchCategoria = categoriaSelecionada === 'Todas' || produto.categoria === categoriaSelecionada;
       return matchBusca && matchCategoria;
     });
-  }, [busca, categoriaSelecionada]);
+  }, [busca, categoriaSelecionada, produtos]);
 
   // Obter comanda atual
   const comandaAtual = comandaSelecionada ? comandas.get(comandaSelecionada) : null;
@@ -413,30 +445,49 @@ export default function PDV() {
 
               {/* Grid de Produtos */}
               <div className="flex-1 overflow-y-auto scrollbar-thin">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-3">
-                  {produtosFiltrados.map((produto) => (
-                    <button
-                      key={produto.id}
-                      onClick={() => {
-                        adicionarProduto(produto);
-                        // On mobile, show a quick feedback
-                        if (window.innerWidth < 768) {
-                          setMobileTab('comanda');
-                        }
-                      }}
-                      className="pdv-product-card text-left p-2 md:p-3"
-                    >
-                      <div className="aspect-square bg-muted rounded-lg mb-2 flex items-center justify-center">
-                        <Package className="w-6 md:w-8 h-6 md:h-8 text-muted-foreground" />
-                      </div>
-                      <p className="text-xs md:text-sm font-medium text-foreground line-clamp-2">{produto.nome}</p>
-                      <p className="text-xs text-muted-foreground hidden sm:block">{produto.categoria}</p>
-                      <p className="text-sm md:text-lg font-bold text-primary mt-1">
-                        R$ {produto.preco.toFixed(2).replace('.', ',')}
-                      </p>
-                    </button>
-                  ))}
-                </div>
+                {loadingProdutos ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                    <p>Carregando produtos...</p>
+                  </div>
+                ) : erroProdutos ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-4 text-destructive">
+                    <AlertCircle className="w-12 h-12" />
+                    <p className="font-medium">Erro ao carregar produtos</p>
+                    <p className="text-sm text-muted-foreground">{erroProdutos}</p>
+                  </div>
+                ) : produtosFiltrados.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
+                    <Package className="w-12 h-12" />
+                    <p className="font-medium">Nenhum produto encontrado</p>
+                    <p className="text-sm">Cadastre produtos no Estoque para exibir aqui</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-3">
+                    {produtosFiltrados.map((produto) => (
+                      <button
+                        key={produto.id}
+                        onClick={() => {
+                          adicionarProduto(produto);
+                          // On mobile, show a quick feedback
+                          if (window.innerWidth < 768) {
+                            setMobileTab('comanda');
+                          }
+                        }}
+                        className="pdv-product-card text-left p-2 md:p-3"
+                      >
+                        <div className="aspect-square bg-muted rounded-lg mb-2 flex items-center justify-center">
+                          <Package className="w-6 md:w-8 h-6 md:h-8 text-muted-foreground" />
+                        </div>
+                        <p className="text-xs md:text-sm font-medium text-foreground line-clamp-2">{produto.nome}</p>
+                        <p className="text-xs text-muted-foreground hidden sm:block">{produto.categoria}</p>
+                        <p className="text-sm md:text-lg font-bold text-primary mt-1">
+                          R$ {produto.preco.toFixed(2).replace('.', ',')}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
