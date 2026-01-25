@@ -19,6 +19,8 @@ import {
   ShoppingCart,
   AlertCircle,
   Loader2,
+  Calculator,
+  Split,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { API_ENDPOINTS } from '@/services/config';
@@ -43,12 +45,27 @@ interface ItemComanda {
   observacao?: string;
 }
 
+interface Cliente {
+  id: string;
+  nome: string;
+  cpf_cnpj?: string;
+  telefone?: string;
+}
+
 interface Comanda {
   numero: number;
   clienteNome: string;
+  clienteId?: string;
   itens: ItemComanda[];
   status: 'aberta' | 'fechada';
   createdAt: Date;
+}
+
+interface PagamentoDuplo {
+  forma1: string;
+  valor1: number;
+  forma2: string;
+  valor2: number;
 }
 
 const formasPagamento = [
@@ -82,6 +99,25 @@ export default function PDV() {
   const [erroProdutos, setErroProdutos] = useState<string | null>(null);
   const [categorias, setCategorias] = useState<string[]>(['Todas']);
 
+  // Estado para clientes (fiado)
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
+  const [buscaCliente, setBuscaCliente] = useState('');
+  const [showSeletorCliente, setShowSeletorCliente] = useState(false);
+
+  // Estado para pagamento em dinheiro (troco)
+  const [valorRecebido, setValorRecebido] = useState<number>(0);
+  const [showTroco, setShowTroco] = useState(false);
+
+  // Estado para pagamento duplo
+  const [usarPagamentoDuplo, setUsarPagamentoDuplo] = useState(false);
+  const [pagamentoDuplo, setPagamentoDuplo] = useState<PagamentoDuplo>({
+    forma1: 'dinheiro',
+    valor1: 0,
+    forma2: 'pix',
+    valor2: 0,
+  });
+
   // Carregar produtos do estoque via API
   useEffect(() => {
     const carregarProdutos = async () => {
@@ -94,9 +130,8 @@ export default function PDV() {
         setErroProdutos(response.error);
         setProdutos([]);
       } else if (response.data) {
-        // Mapear dados da API para interface do PDV
         const produtosMapeados: Produto[] = response.data
-          .filter((p: any) => p.ativo !== false) // Apenas produtos ativos
+          .filter((p: any) => p.ativo !== false)
           .map((p: any) => ({
             id: p.id,
             nome: p.nome,
@@ -107,8 +142,6 @@ export default function PDV() {
           }));
         
         setProdutos(produtosMapeados);
-        
-        // Extrair categorias únicas
         const categoriasUnicas = ['Todas', ...new Set(produtosMapeados.map(p => p.categoria))];
         setCategorias(categoriasUnicas);
       } else {
@@ -121,6 +154,22 @@ export default function PDV() {
     carregarProdutos();
   }, []);
 
+  // Carregar clientes para fiado
+  useEffect(() => {
+    const carregarClientes = async () => {
+      const response = await api.get<any[]>(API_ENDPOINTS.clientes);
+      if (response.data) {
+        setClientes(response.data.map((c: any) => ({
+          id: c.id,
+          nome: c.nome,
+          cpf_cnpj: c.cpf_cnpj,
+          telefone: c.telefone,
+        })));
+      }
+    };
+    carregarClientes();
+  }, []);
+
   // Filtrar produtos
   const produtosFiltrados = useMemo(() => {
     return produtos.filter((produto) => {
@@ -131,6 +180,17 @@ export default function PDV() {
       return matchBusca && matchCategoria;
     });
   }, [busca, categoriaSelecionada, produtos]);
+
+  // Filtrar clientes
+  const clientesFiltrados = useMemo(() => {
+    if (!buscaCliente.trim()) return clientes;
+    const termo = buscaCliente.toLowerCase();
+    return clientes.filter(c => 
+      c.nome.toLowerCase().includes(termo) ||
+      c.cpf_cnpj?.includes(termo) ||
+      c.telefone?.includes(termo)
+    );
+  }, [clientes, buscaCliente]);
 
   // Obter comanda atual
   const comandaAtual = comandaSelecionada ? comandas.get(comandaSelecionada) : null;
@@ -145,8 +205,11 @@ export default function PDV() {
   const valorDesconto = (subtotal * descontoGeral) / 100;
   const total = subtotal - valorDesconto;
 
-  const getTaxaOperadora = () => {
-    switch (formaPagamento) {
+  // Calcular troco
+  const troco = valorRecebido > total ? valorRecebido - total : 0;
+
+  const getTaxaOperadora = (forma: string) => {
+    switch (forma) {
       case 'debito': return configFinanceira.taxaDebito;
       case 'credito': return configFinanceira.taxaCreditoVista;
       case 'pix': return configFinanceira.taxaPix;
@@ -155,14 +218,29 @@ export default function PDV() {
     }
   };
 
-  const taxa = getTaxaOperadora();
+  const taxa = formaPagamento ? getTaxaOperadora(formaPagamento) : 0;
   const valorTaxa = (total * taxa) / 100;
   const valorLiquido = total - valorTaxa;
+
+  // Para pagamento duplo
+  const calcularTaxaDupla = () => {
+    const taxa1 = getTaxaOperadora(pagamentoDuplo.forma1);
+    const taxa2 = getTaxaOperadora(pagamentoDuplo.forma2);
+    const valorTaxa1 = (pagamentoDuplo.valor1 * taxa1) / 100;
+    const valorTaxa2 = (pagamentoDuplo.valor2 * taxa2) / 100;
+    return valorTaxa1 + valorTaxa2;
+  };
+
+  // Validar se fiado tem cliente selecionado
+  const podeFinalizarFiado = formaPagamento !== 'fiado' || clienteSelecionado !== null;
+
+  // Validar pagamento duplo
+  const pagamentoDuploValido = !usarPagamentoDuplo || 
+    (pagamentoDuplo.valor1 + pagamentoDuplo.valor2 >= total * 0.99); // 99% para margem de arredondamento
 
   // Abrir/Selecionar comanda
   const selecionarComanda = (numero: number) => {
     if (!comandas.has(numero)) {
-      // Criar nova comanda
       setComandas(new Map(comandas.set(numero, {
         numero,
         clienteNome: '',
@@ -175,6 +253,9 @@ export default function PDV() {
     setView('produtos');
     setDescontoGeral(0);
     setFormaPagamento(null);
+    setClienteSelecionado(null);
+    setValorRecebido(0);
+    setUsarPagamentoDuplo(false);
   };
 
   // Adicionar produto à comanda
@@ -228,6 +309,14 @@ export default function PDV() {
     setComandas(new Map(comandas.set(comandaSelecionada, { ...comandaAtual, clienteNome: nome })));
   };
 
+  // Selecionar cliente para fiado
+  const selecionarCliente = (cliente: Cliente) => {
+    setClienteSelecionado(cliente);
+    atualizarNomeCliente(cliente.nome);
+    setShowSeletorCliente(false);
+    setBuscaCliente('');
+  };
+
   // Estado para salvar venda
   const [salvandoVenda, setSalvandoVenda] = useState(false);
 
@@ -236,21 +325,33 @@ export default function PDV() {
 
   // Finalizar venda via API local
   const finalizarVenda = async () => {
-    if (!comandaSelecionada || !comandaAtual || !formaPagamento) return;
+    if (!comandaSelecionada || !comandaAtual) return;
+    
+    // Validar forma de pagamento
+    if (!usarPagamentoDuplo && !formaPagamento) return;
+    
+    // Validar fiado com cliente
+    if (formaPagamento === 'fiado' && !clienteSelecionado) {
+      alert('Para venda no fiado, é obrigatório selecionar um cliente cadastrado.');
+      return;
+    }
+
+    // Validar valor recebido para dinheiro
+    if (formaPagamento === 'dinheiro' && valorRecebido < total) {
+      alert('O valor recebido deve ser maior ou igual ao total da venda.');
+      return;
+    }
     
     setSalvandoVenda(true);
     
     // Montar payload para API local
-    const payload = {
+    const payload: any = {
       comanda_numero: comandaSelecionada,
-      cliente_nome: comandaAtual.clienteNome || null,
-      forma_pagamento: formaPagamento,
+      cliente_nome: comandaAtual.clienteNome || clienteSelecionado?.nome || null,
+      cliente_id: clienteSelecionado?.id || null,
       valor_bruto: subtotal,
       desconto: descontoGeral,
       valor_desconto: valorDesconto,
-      valor_liquido: valorLiquido,
-      taxa_operadora: taxa,
-      valor_taxa: valorTaxa,
       valor_total: total,
       itens: comandaAtual.itens.map(item => ({
         produto_id: item.produto.id,
@@ -261,6 +362,29 @@ export default function PDV() {
         subtotal: item.produto.preco * item.quantidade,
       })),
     };
+
+    if (usarPagamentoDuplo) {
+      // Pagamento duplo
+      payload.pagamento_duplo = true;
+      payload.forma_pagamento_1 = pagamentoDuplo.forma1;
+      payload.valor_pagamento_1 = pagamentoDuplo.valor1;
+      payload.forma_pagamento_2 = pagamentoDuplo.forma2;
+      payload.valor_pagamento_2 = pagamentoDuplo.valor2;
+      payload.taxa_operadora = calcularTaxaDupla();
+      payload.valor_liquido = total - calcularTaxaDupla();
+    } else {
+      // Pagamento simples
+      payload.forma_pagamento = formaPagamento;
+      payload.taxa_operadora = taxa;
+      payload.valor_taxa = valorTaxa;
+      payload.valor_liquido = valorLiquido;
+      
+      // Dados específicos para dinheiro
+      if (formaPagamento === 'dinheiro') {
+        payload.valor_recebido = valorRecebido;
+        payload.troco = troco;
+      }
+    }
     
     const response = await api.post<any>(API_ENDPOINTS.vendas, payload);
     
@@ -275,12 +399,21 @@ export default function PDV() {
     novasComandas.delete(comandaSelecionada);
     setComandas(novasComandas);
     
-    alert(`✅ Venda finalizada com sucesso!\n\nComanda: ${comandaSelecionada}\nValor: R$ ${total.toFixed(2).replace('.', ',')}\nForma: ${formaPagamento}`);
+    let mensagem = `✅ Venda finalizada com sucesso!\n\nComanda: ${comandaSelecionada}\nValor: R$ ${total.toFixed(2).replace('.', ',')}`;
+    
+    if (formaPagamento === 'dinheiro' && troco > 0) {
+      mensagem += `\n\n💵 TROCO: R$ ${troco.toFixed(2).replace('.', ',')}`;
+    }
+    
+    alert(mensagem);
     
     setComandaSelecionada(null);
     setView('comandas');
     setFormaPagamento(null);
     setDescontoGeral(0);
+    setClienteSelecionado(null);
+    setValorRecebido(0);
+    setUsarPagamentoDuplo(false);
     setSalvandoVenda(false);
   };
 
@@ -306,6 +439,38 @@ export default function PDV() {
         comandas.get(n)?.clienteNome.toLowerCase().includes(buscaComanda.toLowerCase())
       )
     : Array.from({ length: TOTAL_COMANDAS }, (_, i) => i + 1);
+
+  // Quando mudar forma de pagamento
+  const handleFormaPagamento = (forma: string) => {
+    setFormaPagamento(forma);
+    setUsarPagamentoDuplo(false);
+    
+    if (forma === 'fiado') {
+      setShowSeletorCliente(true);
+    } else {
+      setShowSeletorCliente(false);
+    }
+    
+    if (forma === 'dinheiro') {
+      setShowTroco(true);
+      setValorRecebido(total);
+    } else {
+      setShowTroco(false);
+      setValorRecebido(0);
+    }
+  };
+
+  // Ativar pagamento duplo
+  const ativarPagamentoDuplo = () => {
+    setUsarPagamentoDuplo(true);
+    setFormaPagamento(null);
+    setPagamentoDuplo({
+      forma1: 'dinheiro',
+      valor1: Math.floor(total / 2),
+      forma2: 'pix',
+      valor2: total - Math.floor(total / 2),
+    });
+  };
 
   return (
     <div className="fixed inset-0 bg-background flex flex-col">
@@ -507,7 +672,6 @@ export default function PDV() {
                         key={produto.id}
                         onClick={() => {
                           adicionarProduto(produto);
-                          // On mobile, show a quick feedback
                           if (window.innerWidth < 768) {
                             setMobileTab('comanda');
                           }
@@ -634,39 +798,227 @@ export default function PDV() {
                         <span className="text-sm text-muted-foreground">% desconto</span>
                       </div>
 
-                      {/* Formas de Pagamento */}
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium text-foreground">Forma de pagamento:</p>
-                        <div className="grid grid-cols-3 gap-2">
-                          {formasPagamento.map((forma) => (
-                            <button
-                              key={forma.id}
-                              onClick={() => setFormaPagamento(forma.id)}
-                              className={cn(
-                                'p-2 md:p-3 rounded-lg flex flex-col items-center gap-1 transition-colors',
-                                formaPagamento === forma.id
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                              )}
-                            >
-                              <forma.icon className="w-4 md:w-5 h-4 md:h-5" />
-                              <span className="text-xs font-medium">{forma.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      {/* Opção de pagamento duplo */}
+                      <button
+                        onClick={ativarPagamentoDuplo}
+                        className={cn(
+                          'w-full p-2 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-colors',
+                          usarPagamentoDuplo
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                        )}
+                      >
+                        <Split className="w-4 h-4" />
+                        Pagar com 2 formas
+                      </button>
 
-                      {formaPagamento && taxa > 0 && (
-                        <div className="p-3 bg-warning/10 rounded-lg text-sm">
-                          <div className="flex justify-between text-warning">
-                            <span>Taxa ({taxa}%)</span>
-                            <span>-R$ {valorTaxa.toFixed(2).replace('.', ',')}</span>
+                      {usarPagamentoDuplo ? (
+                        // Pagamento Duplo
+                        <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
+                          <p className="text-sm font-medium text-foreground">Pagamento Duplo</p>
+                          
+                          {/* Primeira forma */}
+                          <div className="space-y-2">
+                            <select
+                              value={pagamentoDuplo.forma1}
+                              onChange={(e) => setPagamentoDuplo({ ...pagamentoDuplo, forma1: e.target.value })}
+                              className="input-field text-sm"
+                            >
+                              {formasPagamento.filter(f => f.id !== 'fiado').map(f => (
+                                <option key={f.id} value={f.id}>{f.label}</option>
+                              ))}
+                            </select>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-muted-foreground">R$</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={pagamentoDuplo.valor1}
+                                onChange={(e) => {
+                                  const v1 = Number(e.target.value);
+                                  setPagamentoDuplo({ 
+                                    ...pagamentoDuplo, 
+                                    valor1: v1,
+                                    valor2: Math.max(0, total - v1),
+                                  });
+                                }}
+                                className="flex-1 input-field text-sm"
+                              />
+                            </div>
                           </div>
-                          <div className="flex justify-between font-medium text-foreground mt-1">
-                            <span>Valor líquido</span>
-                            <span>R$ {valorLiquido.toFixed(2).replace('.', ',')}</span>
+
+                          <div className="border-t border-border my-2" />
+
+                          {/* Segunda forma */}
+                          <div className="space-y-2">
+                            <select
+                              value={pagamentoDuplo.forma2}
+                              onChange={(e) => setPagamentoDuplo({ ...pagamentoDuplo, forma2: e.target.value })}
+                              className="input-field text-sm"
+                            >
+                              {formasPagamento.filter(f => f.id !== 'fiado').map(f => (
+                                <option key={f.id} value={f.id}>{f.label}</option>
+                              ))}
+                            </select>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-muted-foreground">R$</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={pagamentoDuplo.valor2}
+                                onChange={(e) => {
+                                  const v2 = Number(e.target.value);
+                                  setPagamentoDuplo({ 
+                                    ...pagamentoDuplo, 
+                                    valor2: v2,
+                                    valor1: Math.max(0, total - v2),
+                                  });
+                                }}
+                                className="flex-1 input-field text-sm"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Soma dos valores */}
+                          <div className="flex justify-between text-sm pt-2 border-t border-border">
+                            <span className="text-muted-foreground">Soma:</span>
+                            <span className={cn(
+                              'font-medium',
+                              pagamentoDuplo.valor1 + pagamentoDuplo.valor2 >= total * 0.99
+                                ? 'text-success'
+                                : 'text-destructive'
+                            )}>
+                              R$ {(pagamentoDuplo.valor1 + pagamentoDuplo.valor2).toFixed(2).replace('.', ',')}
+                            </span>
                           </div>
                         </div>
+                      ) : (
+                        <>
+                          {/* Formas de Pagamento Simples */}
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium text-foreground">Forma de pagamento:</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {formasPagamento.map((forma) => (
+                                <button
+                                  key={forma.id}
+                                  onClick={() => handleFormaPagamento(forma.id)}
+                                  className={cn(
+                                    'p-2 md:p-3 rounded-lg flex flex-col items-center gap-1 transition-colors',
+                                    formaPagamento === forma.id
+                                      ? 'bg-primary text-primary-foreground'
+                                      : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                                  )}
+                                >
+                                  <forma.icon className="w-4 md:w-5 h-4 md:h-5" />
+                                  <span className="text-xs font-medium">{forma.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Seletor de Cliente para Fiado */}
+                          {formaPagamento === 'fiado' && (
+                            <div className="space-y-2 p-3 bg-warning/10 rounded-lg border border-warning/30">
+                              <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                                <User className="w-4 h-4" />
+                                Selecionar Cliente (obrigatório)
+                              </p>
+                              
+                              {clienteSelecionado ? (
+                                <div className="flex items-center justify-between p-2 bg-background rounded">
+                                  <div>
+                                    <p className="font-medium text-foreground">{clienteSelecionado.nome}</p>
+                                    <p className="text-xs text-muted-foreground">{clienteSelecionado.telefone || clienteSelecionado.cpf_cnpj}</p>
+                                  </div>
+                                  <button 
+                                    onClick={() => setClienteSelecionado(null)}
+                                    className="text-destructive hover:bg-destructive/10 p-1 rounded"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <input
+                                    type="text"
+                                    placeholder="Buscar cliente por nome, CPF ou telefone..."
+                                    value={buscaCliente}
+                                    onChange={(e) => setBuscaCliente(e.target.value)}
+                                    className="input-field text-sm"
+                                  />
+                                  <div className="max-h-32 overflow-y-auto space-y-1">
+                                    {clientesFiltrados.length === 0 ? (
+                                      <p className="text-xs text-muted-foreground text-center py-2">
+                                        Nenhum cliente encontrado
+                                      </p>
+                                    ) : (
+                                      clientesFiltrados.slice(0, 5).map(cliente => (
+                                        <button
+                                          key={cliente.id}
+                                          onClick={() => selecionarCliente(cliente)}
+                                          className="w-full p-2 text-left bg-background hover:bg-accent rounded text-sm"
+                                        >
+                                          <p className="font-medium">{cliente.nome}</p>
+                                          <p className="text-xs text-muted-foreground">{cliente.telefone || cliente.cpf_cnpj}</p>
+                                        </button>
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Campo de Valor Recebido para Dinheiro */}
+                          {formaPagamento === 'dinheiro' && (
+                            <div className="space-y-2 p-3 bg-success/10 rounded-lg border border-success/30">
+                              <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                                <Calculator className="w-4 h-4" />
+                                Valor Recebido
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg font-bold">R$</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={valorRecebido}
+                                  onChange={(e) => setValorRecebido(Number(e.target.value))}
+                                  className="flex-1 input-field text-lg font-bold"
+                                  placeholder="0,00"
+                                />
+                              </div>
+                              {valorRecebido >= total && troco > 0 && (
+                                <div className="flex justify-between items-center p-2 bg-success/20 rounded-lg mt-2">
+                                  <span className="text-success font-medium">TROCO:</span>
+                                  <span className="text-xl font-bold text-success">
+                                    R$ {troco.toFixed(2).replace('.', ',')}
+                                  </span>
+                                </div>
+                              )}
+                              {valorRecebido < total && valorRecebido > 0 && (
+                                <p className="text-xs text-destructive">
+                                  Faltam R$ {(total - valorRecebido).toFixed(2).replace('.', ',')}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {formaPagamento && taxa > 0 && (
+                            <div className="p-3 bg-warning/10 rounded-lg text-sm">
+                              <div className="flex justify-between text-warning">
+                                <span>Taxa ({taxa}%)</span>
+                                <span>-R$ {valorTaxa.toFixed(2).replace('.', ',')}</span>
+                              </div>
+                              <div className="flex justify-between font-medium text-foreground mt-1">
+                                <span>Valor líquido</span>
+                                <span>R$ {valorLiquido.toFixed(2).replace('.', ',')}</span>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   )}
@@ -719,7 +1071,13 @@ export default function PDV() {
                         </button>
                         <button
                           onClick={finalizarVenda}
-                          disabled={!formaPagamento || salvandoVenda}
+                          disabled={
+                            salvandoVenda || 
+                            (!usarPagamentoDuplo && !formaPagamento) ||
+                            !podeFinalizarFiado ||
+                            !pagamentoDuploValido ||
+                            (formaPagamento === 'dinheiro' && valorRecebido < total)
+                          }
                           className="btn-success flex-1 py-3 text-base md:text-lg"
                         >
                           {salvandoVenda ? (

@@ -12,7 +12,6 @@ import {
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Link } from 'react-router-dom';
 import { api, API_ENDPOINTS } from '@/services/api';
-import { getCachedData, setCachedData } from '@/services/indexedDB';
 
 interface DashboardStats {
   vendasHoje: number;
@@ -70,13 +69,7 @@ export default function Dashboard() {
     setLoading(true);
     
     try {
-      // Tentar carregar do cache primeiro
-      const cachedStats = await getCachedData<DashboardStats>('dashboard_stats');
-      if (cachedStats) {
-        setStats(cachedStats);
-      }
-
-      // Buscar dados frescos da API local
+      // Buscar dados frescos da API local - SEM usar cache proativo
       const [
         produtosRes,
         clientesRes,
@@ -105,7 +98,6 @@ export default function Dashboard() {
       };
       
       setStats(newStats);
-      await setCachedData('dashboard_stats', newStats, 5 * 60 * 1000); // Cache 5 min
 
       // Vendas da semana (últimos 7 dias)
       const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
