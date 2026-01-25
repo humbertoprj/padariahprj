@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FileText, Download, ShoppingCart, Package, DollarSign, Users, Factory, Loader2 } from 'lucide-react';
 import { useEmpresa } from '@/contexts/EmpresaContext';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/services/api';
+import { API_ENDPOINTS } from '@/services/config';
 
 interface RelatorioData {
   tipo: string;
@@ -19,15 +21,26 @@ const relatoriosDisponiveis = [
   { id: 'clientes', label: 'Clientes', icon: Users, descricao: 'Análise de clientes e vendas' },
 ];
 
-// Relatórios serão carregados da API
-const dadosRelatorios: Record<string, RelatorioData> = {};
+// Função para obter primeiro e último dia do mês atual
+const getDefaultDates = () => {
+  const hoje = new Date();
+  const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+  
+  return {
+    inicio: primeiroDia.toISOString().split('T')[0],
+    fim: ultimoDia.toISOString().split('T')[0],
+  };
+};
 
 export default function Relatorios() {
   const { toast } = useToast();
   const { empresa } = useEmpresa();
+  const defaultDates = getDefaultDates();
+  
   const [relatorioSelecionado, setRelatorioSelecionado] = useState<string | null>(null);
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
+  const [dataInicio, setDataInicio] = useState(defaultDates.inicio);
+  const [dataFim, setDataFim] = useState(defaultDates.fim);
   const [relatorioGerado, setRelatorioGerado] = useState<RelatorioData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -35,17 +48,90 @@ export default function Relatorios() {
     if (!relatorioSelecionado || !dataInicio || !dataFim) return;
     
     setLoading(true);
-    // Simular carregamento
-    await new Promise(resolve => setTimeout(resolve, 800));
     
-    const dados = dadosRelatorios[relatorioSelecionado];
-    setRelatorioGerado(dados || null);
-    setLoading(false);
-    
-    toast({ 
-      title: 'Relatório gerado', 
-      description: `Relatório de ${relatoriosDisponiveis.find(r => r.id === relatorioSelecionado)?.label} gerado com sucesso.` 
-    });
+    try {
+      let dados: any[] = [];
+      let totais: Record<string, number> = {};
+
+      // Buscar dados da API baseado no tipo de relatório
+      switch (relatorioSelecionado) {
+        case 'vendas': {
+          const res = await api.get<any[]>(`${API_ENDPOINTS.vendas}?data_inicio=${dataInicio}&data_fim=${dataFim}`);
+          if (res.data) {
+            dados = res.data.map(v => ({
+              data: new Date(v.created_at).toLocaleDateString('pt-BR'),
+              cliente: v.cliente_nome || 'Avulso',
+              formaPagamento: v.forma_pagamento,
+              valorBruto: v.valor_bruto || 0,
+              desconto: v.desconto || 0,
+              valorLiquido: v.valor_liquido || 0,
+            }));
+            totais = {
+              totalVendas: dados.length,
+              valorBruto: dados.reduce((s, v) => s + v.valorBruto, 0),
+              valorLiquido: dados.reduce((s, v) => s + v.valorLiquido, 0),
+            };
+          }
+          break;
+        }
+        case 'estoque': {
+          const res = await api.get<any[]>(API_ENDPOINTS.produtos);
+          if (res.data) {
+            dados = res.data.map(p => ({
+              produto: p.nome,
+              categoria: p.categoria || '-',
+              estoqueAtual: p.estoque_atual || 0,
+              estoqueMinimo: p.estoque_minimo || 0,
+              status: (p.estoque_atual || 0) <= (p.estoque_minimo || 0) ? 'Baixo' : 'OK',
+              valorEstoque: (p.estoque_atual || 0) * (p.preco || 0),
+            }));
+            totais = {
+              totalProdutos: dados.length,
+              produtosBaixoEstoque: dados.filter(p => p.status === 'Baixo').length,
+              valorTotalEstoque: dados.reduce((s, p) => s + p.valorEstoque, 0),
+            };
+          }
+          break;
+        }
+        case 'clientes': {
+          const res = await api.get<any[]>(API_ENDPOINTS.clientes);
+          if (res.data) {
+            dados = res.data.map(c => ({
+              nome: c.nome,
+              telefone: c.telefone || '-',
+              email: c.email || '-',
+              saldoFiado: c.saldo_fiado || 0,
+              pontos: c.pontos || 0,
+            }));
+            totais = {
+              totalClientes: dados.length,
+              totalFiado: dados.reduce((s, c) => s + c.saldoFiado, 0),
+              totalPontos: dados.reduce((s, c) => s + c.pontos, 0),
+            };
+          }
+          break;
+        }
+        default:
+          // Para outros relatórios, retornar vazio por enquanto
+          dados = [];
+          break;
+      }
+
+      setRelatorioGerado({ tipo: relatorioSelecionado, dados, totais });
+      
+      toast({ 
+        title: 'Relatório gerado', 
+        description: `Relatório de ${relatoriosDisponiveis.find(r => r.id === relatorioSelecionado)?.label} gerado com sucesso.` 
+      });
+    } catch (error) {
+      toast({ 
+        title: 'Erro', 
+        description: 'Falha ao gerar relatório. Verifique a conexão com o servidor.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const exportarPDF = () => {
@@ -61,16 +147,25 @@ export default function Relatorios() {
 
     const relInfo = relatoriosDisponiveis.find(r => r.id === relatorioSelecionado);
     
+    if (relatorioGerado.dados.length === 0) {
+      return (
+        <div className="text-center py-12 text-muted-foreground">
+          <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+          <p>Nenhum dado encontrado para o período selecionado</p>
+        </div>
+      );
+    }
+    
     return (
       <div className="space-y-4">
         {/* Totais */}
-        {relatorioGerado.totais && (
+        {relatorioGerado.totais && Object.keys(relatorioGerado.totais).length > 0 && (
           <div className="grid grid-cols-3 gap-4 mb-6">
             {Object.entries(relatorioGerado.totais).map(([key, value]) => (
               <div key={key} className="p-4 bg-muted/50 rounded-lg text-center">
                 <p className="text-xs text-muted-foreground capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
                 <p className="text-lg font-bold text-foreground">
-                  {typeof value === 'number' && key.toLowerCase().includes('valor') 
+                  {typeof value === 'number' && (key.toLowerCase().includes('valor') || key.toLowerCase().includes('fiado'))
                     ? `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
                     : value.toLocaleString('pt-BR')}
                 </p>
@@ -98,11 +193,11 @@ export default function Relatorios() {
                         ? value === 'Baixo' || value === 'Vencido' ? 'text-destructive' 
                         : value === 'OK' || value === 'Concluída' ? 'text-success' 
                         : 'text-warning'
-                        : key === 'valor' || key === 'valorTotal' || key === 'custoEstimado'
+                        : key === 'valor' || key === 'valorTotal' || key === 'custoEstimado' || key === 'valorLiquido' || key === 'valorBruto' || key === 'valorEstoque' || key === 'saldoFiado'
                         ? typeof value === 'number' && value < 0 ? 'text-destructive' : 'text-success'
                         : ''
                     }>
-                      {typeof value === 'number' && (key.toLowerCase().includes('valor') || key.toLowerCase().includes('custo'))
+                      {typeof value === 'number' && (key.toLowerCase().includes('valor') || key.toLowerCase().includes('custo') || key.toLowerCase().includes('fiado'))
                         ? `R$ ${Math.abs(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
                         : String(value)}
                     </td>
@@ -225,9 +320,12 @@ export default function Relatorios() {
                 <p className="text-sm text-muted-foreground">
                   Relatório: {relatoriosDisponiveis.find(r => r.id === relatorioSelecionado)?.label}
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  Período: {new Date(dataInicio).toLocaleDateString('pt-BR')} a {new Date(dataFim).toLocaleDateString('pt-BR')}
+                </p>
               </div>
             </div>
-            {relatorioGerado && (
+            {relatorioGerado && relatorioGerado.dados.length > 0 && (
               <button className="btn-secondary" onClick={exportarPDF}>
                 <Download className="w-4 h-4 mr-2" />
                 Exportar PDF
