@@ -11,7 +11,7 @@ export interface ApiConfig {
 }
 
 const defaultConfig: ApiConfig = {
-  baseUrl: 'http://192.168.3.107:3333',
+  baseUrl: 'http://192.168.3.100:3333',
   fallbackUrl: '', // Sem fallback - apenas servidor real
   timeout: 10000, // 10 segundos
   retryAttempts: 3,
