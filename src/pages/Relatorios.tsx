@@ -74,6 +74,24 @@ export default function Relatorios() {
           }
           break;
         }
+        case 'caixa': {
+          const res = await api.get<any[]>(`${API_ENDPOINTS.vendas}?data_inicio=${dataInicio}&data_fim=${dataFim}`);
+          if (res.data) {
+            dados = res.data.map(v => ({
+              data: new Date(v.created_at).toLocaleDateString('pt-BR'),
+              hora: new Date(v.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+              tipo: 'Entrada',
+              descricao: `Venda ${v.forma_pagamento}`,
+              valor: v.valor_liquido || 0,
+            }));
+            totais = {
+              totalMovimentos: dados.length,
+              totalEntradas: dados.reduce((s, v) => s + v.valor, 0),
+              totalSaidas: 0,
+            };
+          }
+          break;
+        }
         case 'estoque': {
           const res = await api.get<any[]>(API_ENDPOINTS.produtos);
           if (res.data) {
@@ -89,6 +107,63 @@ export default function Relatorios() {
               totalProdutos: dados.length,
               produtosBaixoEstoque: dados.filter(p => p.status === 'Baixo').length,
               valorTotalEstoque: dados.reduce((s, p) => s + p.valorEstoque, 0),
+            };
+          }
+          break;
+        }
+        case 'financeiro': {
+          // Buscar vendas e contas
+          const [vendasRes, contasRes] = await Promise.all([
+            api.get<any[]>(`${API_ENDPOINTS.vendas}?data_inicio=${dataInicio}&data_fim=${dataFim}`),
+            api.get<any[]>(API_ENDPOINTS.contas),
+          ]);
+          
+          const vendas = vendasRes.data || [];
+          const contas = (contasRes.data || []).filter((c: any) => {
+            const data = c.data_vencimento || c.created_at;
+            return data >= dataInicio && data <= dataFim;
+          });
+          
+          // Resumo financeiro
+          const receitaBruta = vendas.reduce((s: number, v: any) => s + (v.valor_bruto || 0), 0);
+          const taxasCartao = vendas.reduce((s: number, v: any) => s + (v.taxa_operadora || 0), 0);
+          const receitaLiquida = vendas.reduce((s: number, v: any) => s + (v.valor_liquido || 0), 0);
+          const despesas = contas.filter((c: any) => c.tipo === 'pagar').reduce((s: number, c: any) => s + (c.valor || 0), 0);
+          
+          dados = [
+            { item: 'Receita Bruta (Vendas)', valor: receitaBruta },
+            { item: '(-) Taxas de Cartão', valor: -taxasCartao },
+            { item: '(=) Receita Líquida', valor: receitaLiquida },
+            { item: '(-) Despesas/Contas a Pagar', valor: -despesas },
+            { item: '(=) Lucro Líquido', valor: receitaLiquida - despesas },
+          ];
+          
+          totais = {
+            receitaBruta,
+            receitaLiquida,
+            lucroLiquido: receitaLiquida - despesas,
+          };
+          break;
+        }
+        case 'producao': {
+          const res = await api.get<any[]>(API_ENDPOINTS.ordens);
+          if (res.data) {
+            dados = res.data
+              .filter((o: any) => {
+                const data = o.created_at?.split('T')[0];
+                return data >= dataInicio && data <= dataFim;
+              })
+              .map((o: any) => ({
+                ordem: `OP-${o.id?.slice(0, 6)}`,
+                produto: o.produto_nome || 'Produto',
+                quantidade: o.quantidade || 0,
+                status: o.status || 'pendente',
+                dataPrevista: o.data_prevista ? new Date(o.data_prevista).toLocaleDateString('pt-BR') : '-',
+              }));
+            totais = {
+              totalOrdens: dados.length,
+              concluidas: dados.filter(o => o.status === 'concluida').length,
+              pendentes: dados.filter(o => o.status === 'pendente').length,
             };
           }
           break;
@@ -112,7 +187,6 @@ export default function Relatorios() {
           break;
         }
         default:
-          // Para outros relatórios, retornar vazio por enquanto
           dados = [];
           break;
       }
