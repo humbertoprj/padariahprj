@@ -213,9 +213,9 @@ export default function Dashboard() {
             <div>
               <p className="text-sm text-muted-foreground">Ticket Médio</p>
               <p className="text-2xl font-bold text-foreground mt-1">
-                R$ {stats.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {(stats.ticketMedio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
-              <p className="text-xs text-muted-foreground mt-2">{stats.numeroVendas} vendas hoje</p>
+              <p className="text-xs text-muted-foreground mt-2">{stats.numeroVendas || 0} vendas hoje</p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
               <ShoppingCart className="w-6 h-6 text-success" />
