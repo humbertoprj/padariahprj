@@ -394,6 +394,34 @@ export default function PDV() {
       return;
     }
     
+    // BAIXA AUTOMÁTICA DE ESTOQUE - Enviar PATCH para cada produto vendido
+    try {
+      for (const item of comandaAtual.itens) {
+        const produtoAtual = produtos.find(p => p.id === item.produto.id);
+        if (produtoAtual) {
+          const novoEstoque = Math.max(0, produtoAtual.estoque - item.quantidade);
+          await api.patch<any>(API_ENDPOINTS.produto(item.produto.id), {
+            estoque_atual: novoEstoque
+          });
+        }
+      }
+      console.log('✅ Estoque atualizado para todos os itens vendidos');
+    } catch (estoqueError) {
+      console.warn('⚠️ Erro ao atualizar estoque (venda já registrada):', estoqueError);
+    }
+    
+    // REGISTRAR FIADO NO CLIENTE - Atualizar saldo_fiado
+    if (formaPagamento === 'fiado' && clienteSelecionado) {
+      try {
+        await api.patch<any>(API_ENDPOINTS.cliente(clienteSelecionado.id), {
+          saldo_fiado: (clienteSelecionado as any).saldo_fiado + total || total
+        });
+        console.log('✅ Saldo fiado atualizado para cliente:', clienteSelecionado.nome);
+      } catch (fiadoError) {
+        console.warn('⚠️ Erro ao atualizar saldo fiado:', fiadoError);
+      }
+    }
+    
     // Sucesso - limpar comanda
     const novasComandas = new Map(comandas);
     novasComandas.delete(comandaSelecionada);
