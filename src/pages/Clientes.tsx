@@ -21,7 +21,6 @@ interface Cliente {
   ultimaCompra: string;
 }
 
-// Mensagem padrão de erro de conexão
 const ERRO_SERVIDOR_OFFLINE = 'Erro: Servidor Local não encontrado. Certifique-se de que o CMD está aberto no computador principal.';
 
 export default function Clientes() {
@@ -34,7 +33,6 @@ export default function Clientes() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
 
-  // Carregar clientes da API local
   const carregarClientes = async () => {
     setLoading(true);
     setErro(null);
@@ -45,7 +43,6 @@ export default function Clientes() {
       setErro(response.status === 0 ? ERRO_SERVIDOR_OFFLINE : response.error);
       setClientes([]);
     } else if (response.data) {
-      // Mapear dados da API para interface local
       const clientesMapeados: Cliente[] = response.data.map((c: any) => ({
         id: c.id,
         nome: c.nome,
@@ -80,11 +77,9 @@ export default function Clientes() {
       c.telefone.includes(busca)
   );
 
-  // Criar cliente via API local
   const handleCreateCliente = async (data: ClienteFormData) => {
     setSaving(true);
     
-    // Payload para API local (snake_case)
     const payload = {
       nome: data.nome,
       cpf_cnpj: data.cpfCnpj || null,
@@ -116,7 +111,6 @@ export default function Clientes() {
     setSaving(false);
   };
 
-  // Editar cliente via API local
   const handleEditCliente = async (data: ClienteFormData) => {
     if (!editingCliente) return;
     setSaving(true);
@@ -131,7 +125,7 @@ export default function Clientes() {
       limite_credito: data.limiteCredito || 0,
     };
     
-    const response = await api.put<any>(API_ENDPOINTS.cliente(editingCliente.id), payload);
+    const response = await api.patch<any>(API_ENDPOINTS.cliente(editingCliente.id), payload);
     
     if (response.error) {
       toast({ 
@@ -154,7 +148,6 @@ export default function Clientes() {
     window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
   };
 
-  // Tela de erro
   if (erro && !loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
@@ -171,7 +164,6 @@ export default function Clientes() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="module-header">
         <div>
           <h1 className="module-title">Clientes (CRM)</h1>
@@ -189,61 +181,32 @@ export default function Clientes() {
         </div>
       </div>
 
-      {/* Loading */}
-      {loading && (
+      {loading ? (
         <div className="flex flex-col items-center justify-center h-[40vh] gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <p className="text-muted-foreground">Carregando clientes do servidor local...</p>
         </div>
-      )}
-
-      {!loading && (
+      ) : (
         <>
-          {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="stat-card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Clientes</p>
-                  <p className="text-2xl font-bold text-foreground">{clientes.length}</p>
-                </div>
-                <Users className="w-8 h-8 text-primary/50" />
-              </div>
+              <p className="text-sm text-muted-foreground">Total Clientes</p>
+              <p className="text-2xl font-bold text-foreground">{clientes.length}</p>
             </div>
             <div className="stat-card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Com Fiado</p>
-                  <p className="text-2xl font-bold text-warning">{clientes.filter((c) => c.saldoFiado > 0).length}</p>
-                </div>
-                <CreditCard className="w-8 h-8 text-warning/50" />
-              </div>
+              <p className="text-sm text-muted-foreground">Com Fiado</p>
+              <p className="text-2xl font-bold text-warning">{clientes.filter((c) => c.saldoFiado > 0).length}</p>
             </div>
             <div className="stat-card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Cashback</p>
-                  <p className="text-2xl font-bold text-success">
-                    R$ {clientes.reduce((acc, c) => acc + c.cashback, 0).toFixed(2).replace('.', ',')}
-                  </p>
-                </div>
-                <Gift className="w-8 h-8 text-success/50" />
-              </div>
+              <p className="text-sm text-muted-foreground">Total Cashback</p>
+              <p className="text-2xl font-bold text-success">R$ {clientes.reduce((acc, c) => acc + c.cashback, 0).toFixed(2).replace('.', ',')}</p>
             </div>
             <div className="stat-card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Pontos</p>
-                  <p className="text-2xl font-bold text-primary">
-                    {clientes.reduce((acc, c) => acc + c.pontos, 0).toLocaleString('pt-BR')}
-                  </p>
-                </div>
-                <Star className="w-8 h-8 text-primary/50" />
-              </div>
+              <p className="text-sm text-muted-foreground">Total Pontos</p>
+              <p className="text-2xl font-bold text-primary">{clientes.reduce((acc, c) => acc + c.pontos, 0).toLocaleString('pt-BR')}</p>
             </div>
           </div>
 
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
@@ -255,127 +218,65 @@ export default function Clientes() {
             />
           </div>
 
-          {/* Grid de Clientes */}
-          {clientes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-4">
-              <Users className="w-12 h-12 text-muted-foreground" />
-              <p className="text-muted-foreground">Nenhum cliente cadastrado</p>
-              <button className="btn-primary" onClick={() => setDialogOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Cadastrar Primeiro Cliente
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {clientesFiltrados.map((cliente) => (
-                <div key={cliente.id} className="stat-card hover:border-primary/50 transition-colors">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-lg font-semibold text-primary">
-                          {cliente.nome.charAt(0)}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">{cliente.nome}</p>
-                        <p className="text-sm text-muted-foreground">{cliente.cpfCnpj || '-'}</p>
-                      </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {clientesFiltrados.map((cliente) => (
+              <div key={cliente.id} className="stat-card hover:border-primary/50 transition-colors">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                      <span className="text-lg font-semibold text-primary">{cliente.nome.charAt(0)}</span>
                     </div>
-                    <div className="flex gap-1">
-                      <button 
-                        className="p-2 hover:bg-accent rounded-lg transition-colors"
-                        onClick={() => setEditingCliente(cliente)}
-                      >
-                        <Edit className="w-4 h-4 text-muted-foreground" />
-                      </button>
-                      <button 
-                        className="p-2 hover:bg-success/10 rounded-lg transition-colors"
-                        onClick={() => handleWhatsApp(cliente)}
-                      >
-                        <MessageCircle className="w-5 h-5 text-success" />
-                      </button>
+                    <div>
+                      <p className="font-medium text-foreground">{cliente.nome}</p>
+                      <p className="text-sm text-muted-foreground">{cliente.cpfCnpj || '-'}</p>
                     </div>
                   </div>
-
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Phone className="w-4 h-4" />
-                      <span>{cliente.telefone || '-'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Mail className="w-4 h-4" />
-                      <span>{cliente.email || '-'}</span>
-                    </div>
+                  <button onClick={() => setEditingCliente(cliente)} className="p-2 hover:bg-accent rounded-lg">
+                    <Edit className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Phone className="w-4 h-4" />
+                    <span>{cliente.telefone || 'Sem telefone'}</span>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-border">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Limite Crédito</p>
-                      <p className="font-medium text-foreground">R$ {cliente.limiteCredito.toFixed(2).replace('.', ',')}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Saldo Fiado</p>
-                      <p className={`font-medium ${cliente.saldoFiado > 0 ? 'text-warning' : 'text-foreground'}`}>
-                        R$ {cliente.saldoFiado.toFixed(2).replace('.', ',')}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Cashback</p>
-                      <p className="font-medium text-success">R$ {cliente.cashback.toFixed(2).replace('.', ',')}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Pontos</p>
-                      <p className="font-medium text-primary">{cliente.pontos.toLocaleString('pt-BR')}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-4 border-t border-border flex justify-between text-xs text-muted-foreground">
-                    <span>Total: R$ {cliente.totalCompras.toFixed(2).replace('.', ',')}</span>
-                    <span>Última: {cliente.ultimaCompra ? new Date(cliente.ultimaCompra).toLocaleDateString('pt-BR') : '-'}</span>
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <span className="text-sm text-muted-foreground">Saldo Fiado:</span>
+                    <span className={`font-bold ${cliente.saldoFiado > 0 ? 'text-destructive' : 'text-success'}`}>
+                      R$ {cliente.saldoFiado.toFixed(2).replace('.', ',')}
+                    </span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => handleWhatsApp(cliente)} className="btn-secondary flex-1 text-xs">
+                    <MessageCircle className="w-3 h-3 mr-1" /> WhatsApp
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </>
       )}
 
-      {/* Dialog Novo Cliente */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen || !!editingCliente} onOpenChange={(open) => {
+        if (!open) {
+          setDialogOpen(false);
+          setEditingCliente(null);
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Novo Cliente</DialogTitle>
+            <DialogTitle>{editingCliente ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
           </DialogHeader>
-          <ClienteForm 
-            onSubmit={handleCreateCliente} 
-            onCancel={() => setDialogOpen(false)}
-            isLoading={saving}
+          <ClienteForm
+            initialData={editingCliente || undefined}
+            onSubmit={editingCliente ? handleEditCliente : handleCreateCliente}
+            onCancel={() => {
+              setDialogOpen(false);
+              setEditingCliente(null);
+            }}
+            isSaving={saving}
           />
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog Editar Cliente */}
-      <Dialog open={!!editingCliente} onOpenChange={(open) => !open && setEditingCliente(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar Cliente</DialogTitle>
-          </DialogHeader>
-          {editingCliente && (
-            <ClienteForm 
-              defaultValues={{
-                nome: editingCliente.nome,
-                cpfCnpj: editingCliente.cpfCnpj,
-                telefone: editingCliente.telefone,
-                email: editingCliente.email,
-                endereco: editingCliente.endereco,
-                dataNascimento: editingCliente.dataNascimento,
-                limiteCredito: editingCliente.limiteCredito,
-              }}
-              onSubmit={handleEditCliente} 
-              onCancel={() => setEditingCliente(null)}
-              isLoading={saving}
-            />
-          )}
         </DialogContent>
       </Dialog>
     </div>
