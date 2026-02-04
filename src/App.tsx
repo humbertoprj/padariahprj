@@ -16,6 +16,7 @@ import Clientes from "./pages/Clientes";
 import Relatorios from "./pages/Relatorios";
 import Usuarios from "./pages/Usuarios";
 import Configuracoes from "./pages/Configuracoes";
+import Comandas from "./pages/Comandas";
 import Instalar from "./pages/Instalar";
 import NotFound from "./pages/NotFound";
 
@@ -32,6 +33,7 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/pdv" element={<PDV />} />
+                <Route path="/comandas" element={<Comandas />} />
                 <Route path="/instalar" element={<Instalar />} />
                 <Route
                   path="/*"
