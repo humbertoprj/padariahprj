@@ -19,6 +19,7 @@ interface DashboardStats {
   totalProdutos: number;
   produtosBaixoEstoque: number;
   totalClientes: number;
+  ticketMedio: number;
 }
 
 interface VendaSemanal {
@@ -51,6 +52,7 @@ const defaultStats: DashboardStats = {
   totalProdutos: 0,
   produtosBaixoEstoque: 0,
   totalClientes: 0,
+  ticketMedio: 0,
 };
 
 export default function Dashboard() {
@@ -89,13 +91,27 @@ export default function Dashboard() {
       const vendasHoje = vendas.filter(v => v.created_at?.startsWith(hoje));
       const produtosBaixoEstoque = produtos.filter(p => (p.estoque_atual || 0) <= (p.estoque_minimo || 0));
 
+      // Calcular faturamento do dia
+      const faturamentoHoje = vendasHoje.reduce((acc, v) => acc + (v.valor_liquido || 0), 0);
+      
+      // Calcular ticket médio
+      const ticketMedio = vendasHoje.length > 0 ? faturamentoHoje / vendasHoje.length : 0;
+
       const newStats: DashboardStats = {
-        vendasHoje: vendasHoje.reduce((acc, v) => acc + (v.valor_liquido || 0), 0),
+        vendasHoje: faturamentoHoje,
         numeroVendas: vendasHoje.length,
         totalProdutos: produtos.length,
         produtosBaixoEstoque: produtosBaixoEstoque.length,
         totalClientes: clientes.length,
+        ticketMedio,
       };
+      
+      console.log('📊 Dashboard carregado da API local:', {
+        vendas: vendas.length,
+        vendasHoje: vendasHoje.length,
+        faturamento: faturamentoHoje,
+        ticketMedio
+      });
       
       setStats(newStats);
 
@@ -195,9 +211,11 @@ export default function Dashboard() {
         <div className="stat-card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Nº de Vendas</p>
-              <p className="text-2xl font-bold text-foreground mt-1">{stats.numeroVendas}</p>
-              <p className="text-xs text-muted-foreground mt-2">Hoje</p>
+              <p className="text-sm text-muted-foreground">Ticket Médio</p>
+              <p className="text-2xl font-bold text-foreground mt-1">
+                R$ {stats.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">{stats.numeroVendas} vendas hoje</p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
               <ShoppingCart className="w-6 h-6 text-success" />
