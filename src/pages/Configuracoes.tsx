@@ -15,17 +15,75 @@ export default function Configuracoes() {
 
   const handleSaveEmpresa = async () => {
     setSaving(true);
-    // Simular salvamento
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    
+    // Enviar para API local
+    const { api, API_ENDPOINTS } = await import('@/services/api');
+    
+    const payload = {
+      nome: empresa.nome,
+      razao_social: empresa.razaoSocial,
+      cnpj: empresa.cnpj,
+      telefone: empresa.telefone,
+      whatsapp: empresa.whatsapp,
+      endereco: empresa.endereco,
+      logo_url: empresa.logoUrl,
+      capa_url: empresa.capaUrl,
+      taxa_debito: configFinanceira.taxaDebito,
+      taxa_credito_vista: configFinanceira.taxaCreditoVista,
+      taxa_credito_parcelado: configFinanceira.taxaCreditoParcelado,
+      taxa_pix: configFinanceira.taxaPix,
+      taxa_voucher: configFinanceira.taxaVoucher,
+    };
+    
+    const response = await api.put<any>(API_ENDPOINTS.empresa, payload);
+    
+    if (response.error) {
+      alert(response.status === 0 
+        ? 'Erro: Servidor Local não encontrado. Certifique-se de que o CMD está aberto no computador principal.'
+        : `Erro ao salvar: ${response.error}`
+      );
+    } else {
+      alert('Configurações salvas com sucesso no servidor local!');
+    }
+    
     setSaving(false);
-    alert('Configurações salvas com sucesso!');
   };
 
   const handleSaveFinanceiro = async () => {
     setSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    
+    // Enviar para API local
+    const { api, API_ENDPOINTS } = await import('@/services/api');
+    
+    const payload = {
+      taxa_debito: configFinanceira.taxaDebito,
+      taxa_credito_vista: configFinanceira.taxaCreditoVista,
+      taxa_credito_parcelado: configFinanceira.taxaCreditoParcelado,
+      taxa_pix: configFinanceira.taxaPix,
+      taxa_voucher: configFinanceira.taxaVoucher,
+    };
+    
+    const response = await api.put<any>(API_ENDPOINTS.empresa, payload);
+    
+    if (response.error) {
+      alert(response.status === 0 
+        ? 'Erro: Servidor Local não encontrado. Certifique-se de que o CMD está aberto no computador principal.'
+        : `Erro ao salvar: ${response.error}`
+      );
+    } else {
+      // Atualizar empresa com novas taxas
+      setEmpresa({
+        ...empresa,
+        taxaDebito: configFinanceira.taxaDebito,
+        taxaCreditoVista: configFinanceira.taxaCreditoVista,
+        taxaCreditoParcelado: configFinanceira.taxaCreditoParcelado,
+        taxaPix: configFinanceira.taxaPix,
+        taxaVoucher: configFinanceira.taxaVoucher,
+      });
+      alert('Configurações financeiras salvas com sucesso!');
+    }
+    
     setSaving(false);
-    alert('Configurações financeiras salvas com sucesso!');
   };
 
   return (
