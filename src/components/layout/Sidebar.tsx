@@ -15,6 +15,7 @@ import {
   UserCog,
   BarChart3,
   Smartphone,
+  ClipboardList,
 } from 'lucide-react';
 import { useEmpresa } from '@/contexts/EmpresaContext';
 import { cn } from '@/lib/utils';
@@ -22,6 +23,7 @@ import { cn } from '@/lib/utils';
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: ShoppingCart, label: 'PDV', path: '/pdv' },
+  { icon: ClipboardList, label: 'Comandas', path: '/comandas' },
   { icon: Package, label: 'Estoque', path: '/estoque' },
   { icon: Factory, label: 'Produção', path: '/producao' },
   { icon: DollarSign, label: 'Financeiro', path: '/financeiro' },

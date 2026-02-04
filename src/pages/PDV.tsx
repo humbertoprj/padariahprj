@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Search,
   Barcode,
@@ -21,12 +21,16 @@ import {
   Loader2,
   Calculator,
   Split,
+  ClipboardList,
+  Scale,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { API_ENDPOINTS } from '@/services/config';
 import { Link } from 'react-router-dom';
 import { useEmpresa } from '@/contexts/EmpresaContext';
 import { cn } from '@/lib/utils';
+import { parseCodigoBalanca, encontrarProdutoPorCodigoBalanca, isCodigoBalanca } from '@/utils/barcodeParser';
+import { useToast } from '@/hooks/use-toast';
 
 interface Produto {
   id: string;
@@ -82,6 +86,7 @@ const TOTAL_COMANDAS = 50;
 
 export default function PDV() {
   const { empresa, configFinanceira } = useEmpresa();
+  const { toast } = useToast();
   const [view, setView] = useState<'comandas' | 'produtos' | 'pagamento'>('comandas');
   const [comandas, setComandas] = useState<Map<number, Comanda>>(new Map());
   const [comandaSelecionada, setComandaSelecionada] = useState<number | null>(null);
@@ -117,6 +122,13 @@ export default function PDV() {
     forma2: 'pix',
     valor2: 0,
   });
+
+  // Estado para buscar comanda do servidor
+  const [buscandoComandaServidor, setBuscandoComandaServidor] = useState(false);
+  const [inputBuscaComandaServidor, setInputBuscaComandaServidor] = useState('');
+
+  // Estado para código de balança
+  const [ultimoCodigoBalanca, setUltimoCodigoBalanca] = useState<string | null>(null);
 
   // Carregar produtos do estoque via API
   useEffect(() => {
@@ -282,6 +294,192 @@ export default function PDV() {
         ...comandaAtual,
         itens: [...comandaAtual.itens, novoItem],
       })));
+    }
+  };
+
+  // Adicionar produto com quantidade e preço específicos (para balança)
+  const adicionarProdutoComValor = (produto: Produto, valor: number) => {
+    if (!comandaSelecionada || !comandaAtual) return;
+
+    // Para produtos de balança, o valor já vem calculado
+    // Criamos um produto temporário com o preço do valor total
+    const novoItem: ItemComanda = {
+      id: crypto.randomUUID(),
+      produto: { ...produto, preco: valor },
+      quantidade: 1,
+      desconto: 0,
+      observacao: `Balança: R$ ${valor.toFixed(2)}`,
+    };
+    
+    setComandas(new Map(comandas.set(comandaSelecionada, {
+      ...comandaAtual,
+      itens: [...comandaAtual.itens, novoItem],
+    })));
+    
+    toast({
+      title: 'Produto de balança adicionado',
+      description: `${produto.nome} - R$ ${valor.toFixed(2)}`,
+    });
+  };
+
+  // Processar código de barras (incluindo balança)
+  const processarCodigoBarras = useCallback((codigo: string) => {
+    if (!codigo.trim()) return;
+
+    // Verificar se é código de balança (começa com 2 e tem 13 dígitos)
+    if (isCodigoBalanca(codigo)) {
+      const parsed = parseCodigoBalanca(codigo);
+      
+      if (parsed.tipo === 'balanca_preco' && parsed.valor) {
+        // Buscar produto pelo código extraído
+        const produtoEncontrado = encontrarProdutoPorCodigoBalanca(
+          produtos.map(p => ({ ...p, codigo_barras: p.codigoBarras })),
+          parsed.codigoProduto
+        );
+        
+        if (produtoEncontrado) {
+          adicionarProdutoComValor(produtoEncontrado as unknown as Produto, parsed.valor);
+          setUltimoCodigoBalanca(codigo);
+          setBusca('');
+          return;
+        } else {
+          // Criar produto genérico de balança
+          const produtoBalanca: Produto = {
+            id: `balanca-${Date.now()}`,
+            nome: `Produto Balança (${parsed.codigoProduto})`,
+            preco: parsed.valor,
+            categoria: 'Balança',
+            codigoBarras: parsed.codigoProduto,
+            estoque: 999,
+          };
+          adicionarProdutoComValor(produtoBalanca, parsed.valor);
+          setUltimoCodigoBalanca(codigo);
+          setBusca('');
+          
+          toast({
+            title: 'Produto de balança',
+            description: `Código ${parsed.codigoProduto} - R$ ${parsed.valor.toFixed(2)}`,
+          });
+          return;
+        }
+      }
+    }
+
+    // Buscar produto normal pelo código de barras
+    const produtoEncontrado = produtos.find(p => 
+      p.codigoBarras === codigo || p.id === codigo
+    );
+    
+    if (produtoEncontrado) {
+      adicionarProduto(produtoEncontrado);
+      setBusca('');
+    }
+  }, [produtos, comandaSelecionada, comandaAtual]);
+
+  // Buscar comanda do servidor local
+  const buscarComandaServidor = async (numeroOuCodigo: string) => {
+    if (!numeroOuCodigo.trim()) return;
+    
+    setBuscandoComandaServidor(true);
+    
+    try {
+      // Tentar buscar como número
+      const numero = parseInt(numeroOuCodigo, 10);
+      
+      // Buscar todas as comandas abertas
+      const response = await api.get<any[]>(API_ENDPOINTS.comandas);
+      
+      if (response.error) {
+        toast({
+          title: 'Erro ao buscar comanda',
+          description: response.status === 0 
+            ? 'Servidor Local não encontrado'
+            : response.error,
+          variant: 'destructive',
+        });
+        setBuscandoComandaServidor(false);
+        return;
+      }
+      
+      // Encontrar comanda pelo número
+      const comandaServidor = response.data?.find((c: any) => 
+        c.numero === numero && c.status === 'aberta'
+      );
+      
+      if (!comandaServidor) {
+        toast({
+          title: 'Comanda não encontrada',
+          description: `Nenhuma comanda aberta com número ${numero}`,
+          variant: 'destructive',
+        });
+        setBuscandoComandaServidor(false);
+        return;
+      }
+      
+      // Buscar itens da comanda
+      const itensResponse = await api.get<any[]>(API_ENDPOINTS.comandaItens(comandaServidor.id));
+      
+      if (itensResponse.data && itensResponse.data.length > 0) {
+        // Mapear itens para o formato local
+        const itensImportados: ItemComanda[] = itensResponse.data.map((item: any) => {
+          const produtoLocal = produtos.find(p => p.id === item.produto_id);
+          return {
+            id: crypto.randomUUID(),
+            produto: produtoLocal || {
+              id: item.produto_id,
+              nome: item.produto_nome || 'Produto',
+              preco: item.preco_unitario || 0,
+              categoria: 'Importado',
+              codigoBarras: '',
+              estoque: 999,
+            },
+            quantidade: item.quantidade,
+            desconto: item.desconto || 0,
+            observacao: item.observacao,
+          };
+        });
+        
+        // Criar ou atualizar comanda local
+        const novaComanda: Comanda = {
+          numero,
+          clienteNome: comandaServidor.cliente_nome || '',
+          clienteId: comandaServidor.cliente_id,
+          itens: itensImportados,
+          status: 'aberta',
+          createdAt: new Date(comandaServidor.created_at),
+        };
+        
+        setComandas(new Map(comandas.set(numero, novaComanda)));
+        setComandaSelecionada(numero);
+        setView('produtos');
+        setInputBuscaComandaServidor('');
+        
+        toast({
+          title: 'Comanda importada!',
+          description: `Comanda ${numero} com ${itensImportados.length} item(ns) importada do servidor.`,
+        });
+      } else {
+        toast({
+          title: 'Comanda vazia',
+          description: `A comanda ${numero} não possui itens.`,
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao buscar comanda:', error);
+      toast({
+        title: 'Erro',
+        description: 'Falha ao buscar comanda do servidor.',
+        variant: 'destructive',
+      });
+    }
+    
+    setBuscandoComandaServidor(false);
+  };
+
+  // Handler para Enter no campo de busca (processar código de barras)
+  const handleBuscaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && busca.trim()) {
+      processarCodigoBarras(busca.trim());
     }
   };
 
@@ -538,22 +736,61 @@ export default function PDV() {
       {view === 'comandas' && (
         <div className="flex-1 flex flex-col p-4 overflow-hidden">
           {/* Header das Comandas */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-4">
             <div>
               <h2 className="text-2xl font-bold text-foreground">Selecione uma Comanda</h2>
               <p className="text-muted-foreground">
                 {comandasAbertas.length} comanda(s) aberta(s) • Total: R$ {comandasAbertas.reduce((t, c) => t + (c.itens.reduce((s, i) => s + i.produto.preco * i.quantidade, 0)), 0).toFixed(2).replace('.', ',')}
               </p>
             </div>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Buscar comanda..."
-                value={buscaComanda}
-                onChange={(e) => setBuscaComanda(e.target.value)}
-                className="input-field pl-10"
-              />
+            
+            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+              {/* Buscar Comanda do Servidor */}
+              <div className="flex gap-2">
+                <div className="relative">
+                  <ClipboardList className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Buscar comanda do servidor..."
+                    value={inputBuscaComandaServidor}
+                    onChange={(e) => setInputBuscaComandaServidor(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && buscarComandaServidor(inputBuscaComandaServidor)}
+                    className="input-field pl-10 w-56"
+                  />
+                </div>
+                <button
+                  onClick={() => buscarComandaServidor(inputBuscaComandaServidor)}
+                  disabled={buscandoComandaServidor || !inputBuscaComandaServidor.trim()}
+                  className="btn-primary whitespace-nowrap"
+                >
+                  {buscandoComandaServidor ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4 mr-1" />
+                      Importar
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              {/* Busca Local */}
+              <div className="relative w-full sm:w-48">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Filtrar..."
+                  value={buscaComanda}
+                  onChange={(e) => setBuscaComanda(e.target.value)}
+                  className="input-field pl-10"
+                />
+              </div>
+              
+              {/* Link para tela de Comandas (Tablet) */}
+              <Link to="/comandas" className="btn-secondary whitespace-nowrap">
+                <ClipboardList className="w-4 h-4 mr-1" />
+                Lançar Itens
+              </Link>
             </div>
           </div>
 
@@ -644,15 +881,21 @@ export default function PDV() {
                   <span className="hidden sm:inline">Comandas</span>
                 </button>
                 <div className="relative flex-1 min-w-0">
-                  <Barcode className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 md:w-5 h-4 md:h-5 text-muted-foreground" />
+                  <Scale className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 md:w-5 h-4 md:h-5 text-muted-foreground" />
                   <input
                     type="text"
-                    placeholder="Buscar produto..."
+                    placeholder="Código de barras ou nome do produto..."
                     value={busca}
                     onChange={(e) => setBusca(e.target.value)}
+                    onKeyDown={handleBuscaKeyDown}
                     className="input-field pl-10 md:pl-11 text-sm md:text-lg w-full"
                     autoFocus
                   />
+                  {busca && isCodigoBalanca(busca) && (
+                    <div className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-warning/20 text-warning px-2 py-0.5 rounded text-xs font-medium">
+                      Balança
+                    </div>
+                  )}
                 </div>
               </div>
 
