@@ -6,6 +6,7 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  base: "/padariahprj/", // Define o caminho base para o GitHub Pages
   server: {
     host: "::",
     port: 8080,
@@ -27,21 +28,21 @@ export default defineConfig(({ mode }) => ({
         background_color: "#111827",
         display: "standalone",
         orientation: "any",
-        start_url: "/",
+        start_url: "/padariahprj/",
         categories: ["business", "productivity"],
         icons: [
           {
-            src: "/pwa-192x192.png",
+            src: "pwa-192x192.png",
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: "/pwa-512x512.png",
+            src: "pwa-512x512.png",
             sizes: "512x512",
             type: "image/png",
           },
           {
-            src: "/pwa-512x512.png",
+            src: "pwa-512x512.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any maskable",
@@ -50,7 +51,7 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        navigateFallback: "/index.html",
+        navigateFallback: "index.html",
         navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
           {
@@ -73,29 +74,7 @@ export default defineConfig(({ mode }) => ({
               expiration: {
                 maxEntries: 100,
                 maxAgeSeconds: 60 * 60 * 24,
-              },
-              networkTimeoutSeconds: 5,
-            },
-          },
-          {
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "images-cache",
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-              },
-            },
-          },
-          {
-            urlPattern: /\.(?:woff|woff2|ttf|otf)$/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "fonts-cache",
-              expiration: {
-                maxEntries: 20,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+                networkTimeoutSeconds: 5,
               },
             },
           },
