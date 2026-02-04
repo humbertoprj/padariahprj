@@ -58,7 +58,7 @@ export function setFallbackUrl(url: string): void {
   setApiConfig({ fallbackUrl: url });
 }
 
-// Endpoints da API
+// Endpoints da API - Ajustados para o servidor local
 export const API_ENDPOINTS = {
   // Health check
   health: '/api/health',
@@ -80,17 +80,15 @@ export const API_ENDPOINTS = {
   vendas: '/api/vendas',
   venda: (id: string) => `/api/vendas/${id}`,
   
-  // Ordens de Produção
-  ordens: '/api/ordens',
-  ordem: (id: string) => `/api/ordens/${id}`,
+  // Produção (Ajustado para o servidor local)
+  ordens: '/api/producao/ordens',
+  ordem: (id: string) => `/api/producao/ordens/${id}`,
+  fichasTecnicas: '/api/producao/receitas',
+  fichaTecnica: (id: string) => `/api/producao/receitas/${id}`,
   
-  // Fichas Técnicas
-  fichasTecnicas: '/api/fichas-tecnicas',
-  fichaTecnica: (id: string) => `/api/fichas-tecnicas/${id}`,
-  
-  // Contas (Financeiro)
-  contas: '/api/contas',
-  conta: (id: string) => `/api/contas/${id}`,
+  // Financeiro
+  contas: '/api/financeiro/resumo',
+  conta: (id: string) => `/api/financeiro/${id}`,
   
   // Empresa
   empresa: '/api/empresa',
